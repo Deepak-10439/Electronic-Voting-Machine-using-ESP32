@@ -1,0 +1,228 @@
+
+╔════════════════════════════════════════════════════════════════════╗
+║                                                                    ║
+║           📱 ELECTRONIC VOTING MACHINE - ARCHITECTURE              ║
+║                                                                    ║
+╚════════════════════════════════════════════════════════════════════╝
+
+
+┌──────────────────────────────────────────────────────────────────┐
+│                         👤 USER                                   │
+│                    (Edit Config.h ONLY)                           │
+└────────────────────────────┬─────────────────────────────────────┘
+                             │
+                             ▼
+                    ┌────────────────┐
+                    │   Config.h     │
+                    │  ⚙️ Settings   │
+                    │                │
+                    │  - MODE_VERIFY │
+                    │  - MODE_ENROLL │
+                    │  - MODE_DELETE │
+                    └────────┬───────┘
+                             │
+                             ▼
+        ┌────────────────────────────────────────────────┐
+        │              main.cpp                          │
+        │         🎮 Mode Controller                     │
+        │                                                │
+        │  - Reads Config.h                              │
+        │  - Initializes hardware                        │
+        │  - Routes to correct mode                      │
+        └─────┬──────────────────┬──────────────┬────────┘
+              │                  │              │
+              ▼                  ▼              ▼
+    ┌─────────────┐    ┌─────────────┐   ┌─────────────┐
+    │ VerifyMode  │    │ EnrollMode  │   │ DeleteMode  │
+    │    .cpp     │    │    .cpp     │   │    .cpp     │
+    │             │    │             │   │             │
+    │ 🔍 Voting   │    │ ➕ Register │   │ 🗑️ Remove   │
+    └──────┬──────┘    └──────┬──────┘   └──────┬──────┘
+           │                  │                  │
+           └──────────────────┼──────────────────┘
+                             │
+                             ▼
+        ┌────────────────────────────────────────────────┐
+        │          Hardware Manager Classes              │
+        ├────────────────────────────────────────────────┤
+        │                                                │
+        │  ┌────────────────────┐                        │
+        │  │ FingerPrintManager │  🖐️ Sensor Control    │
+        │  └────────────────────┘                        │
+        │                                                │
+        │  ┌────────────────────┐                        │
+        │  │    LCDManager      │  📺 Display Control    │
+        │  └────────────────────┘                        │
+        │                                                │
+        │  ┌────────────────────┐                        │
+        │  │   BuzzerManager    │  🔊 Sound Control      │
+        │  └────────────────────┘                        │
+        │                                                │
+        └────────────────────────────────────────────────┘
+                             │
+                             ▼
+        ┌────────────────────────────────────────────────┐
+        │             Physical Hardware                  │
+        ├────────────────────────────────────────────────┤
+        │                                                │
+        │  🖐️  Fingerprint Sensor (Serial2)             │
+        │  📺  LCD Display (I2C 0x27)                    │
+        │  🔊  Buzzer (GPIO 25)                          │
+        │                                                │
+        └────────────────────────────────────────────────┘
+
+
+═══════════════════════════════════════════════════════════════════
+
+                      📊 WORKFLOW DIAGRAM
+
+═══════════════════════════════════════════════════════════════════
+
+
+    START
+      │
+      ▼
+┌─────────────┐
+│ Edit        │
+│ Config.h    │◄─────── Change mode/settings here ONLY
+└─────┬───────┘
+      │
+      ▼
+┌─────────────┐
+│ Upload to   │
+│ ESP32       │
+└─────┬───────┘
+      │
+      ▼
+┌─────────────────────────────────────┐
+│  main.cpp reads Config.h            │
+│  - Which mode is active?            │
+│  - Initialize hardware              │
+│  - Call mode_setup()                │
+└─────┬───────────────────────────────┘
+      │
+      ├─── MODE_VERIFY? ──► VerifyMode_loop() ─► Verify voters
+      │
+      ├─── MODE_ENROLL? ──► EnrollMode_loop() ─► Enroll users
+      │
+      └─── MODE_DELETE? ──► DeleteMode_loop() ─► Delete users
+                │
+                ▼
+          ┌─────────┐
+          │  Loop   │
+          │ Forever │
+          └─────────┘
+
+
+═══════════════════════════════════════════════════════════════════
+
+                    🎯 MODE SELECTION LOGIC
+
+═══════════════════════════════════════════════════════════════════
+
+
+              Config.h: #define MODE_VERIFY
+                            │
+                            ▼
+                      main.cpp checks
+                            │
+              ┌─────────────┼─────────────┐
+              │             │             │
+              ▼             ▼             ▼
+          MODE_VERIFY   MODE_ENROLL   MODE_DELETE
+              ?             ?             ?
+              │             │             │
+             YES           NO            NO
+              │
+              ▼
+     Call verifyMode_setup()
+     Call verifyMode_loop()
+              │
+              ▼
+      [Verification runs]
+
+
+═══════════════════════════════════════════════════════════════════
+
+                    📁 FILE RELATIONSHIPS
+
+═══════════════════════════════════════════════════════════════════
+
+
+Config.h ─────────────────► main.cpp
+                                │
+                                ├───► VerifyMode.cpp
+                                │         │
+                                ├───► EnrollMode.cpp
+                                │         │
+                                └───► DeleteMode.cpp
+                                          │
+                    ┌─────────────────────┼─────────────────────┐
+                    │                     │                     │
+                    ▼                     ▼                     ▼
+        FingerPrintManager.cpp    LCDManager.cpp    BuzzerManager.cpp
+                    │                     │                     │
+                    ▼                     ▼                     ▼
+        FingerPrintManager.h      LCDManager.h      BuzzerManager.h
+
+
+═══════════════════════════════════════════════════════════════════
+
+                    🔄 DATA FLOW EXAMPLE
+                    (Verify Mode)
+
+═══════════════════════════════════════════════════════════════════
+
+
+     User places finger on sensor
+               │
+               ▼
+     VerifyMode.cpp calls fpManager.verifyFingerprint()
+               │
+               ▼
+     FingerPrintManager gets image from sensor
+               │
+               ▼
+     FingerPrintManager searches database
+               │
+               ▼
+     Match found? ──NO──► Show error on LCD, play error sound
+               │
+              YES
+               │
+               ▼
+     Return ID and confidence to VerifyMode
+               │
+               ▼
+     VerifyMode updates LCD (lcdManager.showFingerMatch())
+               │
+               ▼
+     VerifyMode plays success sound (buzzerManager.playSuccess())
+               │
+               ▼
+     Vote registered! Wait for next finger
+
+
+═══════════════════════════════════════════════════════════════════
+
+                    ⚡ QUICK REFERENCE
+
+═══════════════════════════════════════════════════════════════════
+
+┌──────────────────────────────────────────────────────────────────┐
+│  WANT TO...                  │  DO THIS...                       │
+├──────────────────────────────┼───────────────────────────────────┤
+│  Run voting                  │  Config.h: #define MODE_VERIFY    │
+│  Enroll users                │  Config.h: #define MODE_ENROLL    │
+│  Delete users                │  Config.h: #define MODE_DELETE    │
+│  Change settings             │  Edit Config.h values             │
+│  Add new mode                │  Create NewMode.cpp + update main │
+│  Modify LCD messages         │  Edit LCDManager.cpp              │
+│  Change buzzer sounds        │  Edit BuzzerManager.cpp           │
+└──────────────────────────────┴───────────────────────────────────┘
+
+
+═══════════════════════════════════════════════════════════════════
+                    ✨ Remember: Edit Config.h ONLY! ✨
+═══════════════════════════════════════════════════════════════════
+

@@ -1,144 +1,106 @@
-#include <LiquidCrystal_I2C.h>
+/*
+ * Electronic Voting Machine (EVM) using ESP32
+ * Main Controller File
+ * 
+ * INSTRUCTIONS:
+ * 1. Open Config.h file
+ * 2. Uncomment ONLY ONE mode:
+ *    - MODE_VERIFY  : For fingerprint verification/voting
+ *    - MODE_ENROLL  : For enrolling new fingerprints
+ *    - MODE_DELETE  : For deleting fingerprints
+ * 3. Configure settings in Config.h as needed
+ * 4. Upload code to ESP32
+ * 
+ * NO NEED TO EDIT THIS FILE!
+ */
+
+#include <Arduino.h>
 #include <Adafruit_Fingerprint.h>
+#include "Config.h"
+#include "FingerPrintManager.h"
+#include "LCDManager.h"
+#include "BuzzerManager.h"
 
-#define buzzerPin 25
+// Hardware instances
+Adafruit_Fingerprint finger = Adafruit_Fingerprint(&FINGERPRINT_SERIAL);
+LCDManager lcdManager(LCD_ADDRESS, LCD_COLS, LCD_ROWS);
+BuzzerManager buzzerManager(BUZZER_PIN);
+FingerPrintManager fpManager(&finger);
 
-LiquidCrystal_I2C lcd(0x27, 16, 2);
+// Mode-specific function declarations
+#ifdef MODE_VERIFY
+  void verifyMode_setup();
+  void verifyMode_loop();
+#endif
 
-Adafruit_Fingerprint finger = Adafruit_Fingerprint(&Serial2);
+#ifdef MODE_ENROLL
+  void enrollMode_setup();
+  void enrollMode_loop();
+#endif
 
-void lcdPrint(uint8_t row, uint8_t position, String message) {
-  lcd.setCursor(position, row);
-  lcd.print(message);
-}
+#ifdef MODE_DELETE
+  void deleteMode_setup();
+  void deleteMode_loop();
+#endif
 
-void lcdClear() {
-  lcd.clear();
-}
-
-void lcdSetup() {
-  lcd.init();
-  lcd.clear();
-  lcd.backlight();
-}
-
-void buzzer(String type) {
-  if (type == "error") {
-    digitalWrite(buzzerPin, HIGH);
-    delay(300);
-    digitalWrite(buzzerPin, LOW);
-    delay(200);
-    digitalWrite(buzzerPin, HIGH);
-    delay(300);
-    digitalWrite(buzzerPin, LOW);
-  } else if (type == "success") {
-    digitalWrite(buzzerPin, HIGH);
-    delay(500);
-    digitalWrite(buzzerPin, LOW);
-  }
-}
+#ifdef MODE_CLOUD
+  void cloudMode_setup();
+  void cloudMode_loop();
+#endif
 
 void setup() {
   Serial.begin(115200);
-  Serial2.begin(57600);
+  FINGERPRINT_SERIAL.begin(FINGERPRINT_BAUDRATE);
   delay(100);
   
-  lcd.init();
-  lcd.backlight();
-  lcd.clear();
-  lcd.setCursor(0, 0);
-  lcd.print("Welcome to ");
-  lcd.setCursor(0, 1);
-  lcd.print("Fingerprint");
-  delay(2000);
-  lcd.clear();
+  // Initialize hardware
+  lcdManager.initialize();
+  buzzerManager.initialize();
   
-  pinMode(buzzerPin, OUTPUT);
-
-  if (finger.verifyPassword()) {
-    lcd.clear();
-    lcd.setCursor(0, 0);
-    lcd.print("Found fingerprint");
-    lcd.setCursor(0, 1);
-    lcd.print("sensor!");
-    delay(2000);
-  } else {
-    lcd.clear();
-    lcd.setCursor(0, 0);
-    lcd.print("Did not find");
-    lcd.setCursor(0, 1);
-    lcd.print("fingerprint sensor :(");
-    while (1) {
-      delay(1);
-    }
+  // Check which mode is active
+  #if !defined(MODE_VERIFY) && !defined(MODE_ENROLL) && !defined(MODE_DELETE) && !defined(MODE_CLOUD)
+    Serial.println("\n*** ERROR: No mode selected! ***");
+    Serial.println("Please open Config.h and uncomment ONE mode:");
+    Serial.println("  - MODE_VERIFY");
+    Serial.println("  - MODE_ENROLL");
+    Serial.println("  - MODE_DELETE");
+    Serial.println("  - MODE_CLOUD");
+    lcdManager.clear();
+    lcdManager.print(0, 0, "ERROR!");
+    lcdManager.print(1, 0, "No mode set");
+    buzzerManager.playError();
+    while(1) { delay(1000); }
+  #endif
+  
+  // Initialize fingerprint sensor
+  if (!fpManager.initialize()) {
+    Serial.println("Fingerprint sensor initialization failed!");
+    lcdManager.showSensorNotFound();
+    buzzerManager.playError();
+    while (1) { delay(1); }
   }
-
-  finger.getTemplateCount();
-  lcd.clear();
-  lcd.setCursor(0, 0);
-  lcd.print("Sensor contains");
-  lcd.setCursor(0, 1);
-  lcd.print(finger.templateCount);
-  lcd.print(" templates");
-  delay(2000);
-  lcd.clear();
-  lcd.setCursor(0, 0);
-  lcd.print("Waiting for");
-  lcd.setCursor(0, 1);
-  lcd.print("valid finger...");
+  
+  // Call mode-specific setup
+  #ifdef MODE_VERIFY
+    verifyMode_setup();
+  #elif defined(MODE_ENROLL)
+    enrollMode_setup();
+  #elif defined(MODE_DELETE)
+    deleteMode_setup();
+  #elif defined(MODE_CLOUD)
+    cloudMode_setup();
+  #endif
 }
 
 void loop() {
-  uint8_t p = finger.getImage();
-  if (p == FINGERPRINT_OK) {
-    Serial.println("Image taken");
-    
-    p = finger.image2Tz();
-    if (p == FINGERPRINT_OK) {
-      Serial.println("Image converted");
-      
-      p = finger.fingerFastSearch();
-      if (p == FINGERPRINT_OK) {
-        Serial.print("Found ID #");
-        Serial.print(finger.fingerID);
-        Serial.print(" with confidence of ");
-        Serial.println(finger.confidence);
-        
-        lcd.clear();
-        lcd.setCursor(0, 0);
-        lcd.print("ID: ");
-        lcd.print(finger.fingerID);
-        lcd.setCursor(0, 1);
-        lcd.print("Confidence: ");
-        lcd.print(finger.confidence);
-        
-        buzzer("success");
-        delay(2000);
-        
-        lcd.clear();
-        lcd.setCursor(0, 0);
-        lcd.print("Waiting for");
-        lcd.setCursor(0, 1);
-        lcd.print("valid finger...");
-      } else {
-        Serial.println("Did not find a match");
-        lcd.clear();
-        lcd.setCursor(0, 0);
-        lcd.print("No match found");
-        buzzer("error");
-        delay(2000);
-        lcd.clear();
-        lcd.setCursor(0, 0);
-        lcd.print("Waiting for");
-        lcd.setCursor(0, 1);
-        lcd.print("valid finger...");
-      }
-    } else {
-      Serial.println("Failed to convert image");
-    }
-  } else if (p != FINGERPRINT_NOFINGER) {
-    Serial.println("Failed to get image");
-  }
-
-  delay(500);
+  // Call mode-specific loop
+  #ifdef MODE_VERIFY
+    verifyMode_loop();
+  #elif defined(MODE_ENROLL)
+    enrollMode_loop();
+  #elif defined(MODE_DELETE)
+    deleteMode_loop();
+  #elif defined(MODE_CLOUD)
+    cloudMode_loop();
+  #endif
 }
