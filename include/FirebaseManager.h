@@ -200,17 +200,25 @@ public:
         }
     }
     
-    int downloadAndVerify(Adafruit_Fingerprint* finger, int maxTemplates = 100) {
-        Serial.println("Searching Firebase templates...");
+    int cloudVerify(Adafruit_Fingerprint* finger, int maxTemplates = 100) {
+        Serial.println("\n=== Fast Local Verification ===");
+        Serial.println("Converting captured image to template...");
         
-        // Get the captured fingerprint in slot 1
+        // Convert the captured image to a template in slot 1
         uint8_t p = finger->image2Tz(1);
         if (p != FINGERPRINT_OK) {
-            Serial.println("Failed to convert image");
+            Serial.println("✗ Failed to convert image");
+            Serial.print("Error code: ");
+            Serial.println(p);
             return -1;
         }
+        Serial.println("✓ Template created in slot 1");
         
-        // Try to match with up to maxTemplates from Firebase
+        // Download templates from Firebase and verify locally using sensor's matching
+        Serial.println("\nDownloading templates from Firebase for local matching...");
+        int matchedID = -1;
+        int templatesChecked = 0;
+        
         for (int id = 1; id <= maxTemplates; id++) {
             String pathData = "/fingerprints/template_" + String(id) + "/data";
             String pathSize = "/fingerprints/template_" + String(id) + "/size";
@@ -219,9 +227,13 @@ public:
             if (Firebase.RTDB.getString(&firebaseData, pathData)) {
                 String templateData = firebaseData.stringData();
                 
-                if (templateData.length() > 10) { // Valid template
-                    Serial.print("Checking ID ");
-                    Serial.println(id);
+                if (templateData.length() > 10) {
+                    templatesChecked++;
+                    Serial.print("  [");
+                    Serial.print(templatesChecked);
+                    Serial.print("] Checking ID #");
+                    Serial.print(id);
+                    Serial.print("... ");
                     
                     // Get template size
                     int templateSize = 534;
@@ -229,7 +241,7 @@ public:
                         templateSize = firebaseData.intData();
                     }
                     
-                    // Convert string back to bytes
+                    // Convert hex string back to bytes
                     uint8_t templateBuffer[534];
                     int bufferIndex = 0;
                     int startIndex = 0;
@@ -242,40 +254,100 @@ public:
                         }
                     }
                     
-                    // Upload template to sensor slot 2
+                    // Load template into temporary slot 200
                     Serial2.write(templateBuffer, bufferIndex);
                     delay(100);
                     
-                    // Store in temporary slot
+                    // Store in slot 200
                     p = finger->storeModel(200);
                     if (p == FINGERPRINT_OK) {
-                        // Load and convert to slot 2
+                        // Load from slot 200
                         p = finger->loadModel(200);
                         if (p == FINGERPRINT_OK) {
+                            // Convert to CharBuffer2
                             p = finger->image2Tz(2);
                             
                             if (p == FINGERPRINT_OK) {
-                                // Compare slots
-                                p = finger->fingerFastSearch();
+                                // Create model and compare with slot 1
+                                p = finger->createModel();
                                 
-                                if (p == FINGERPRINT_OK && finger->fingerID == 200) {
-                                    Serial.print("Match found! ID: ");
-                                    Serial.println(id);
+                                if (p == FINGERPRINT_OK) {
+                                    // Match found
+                                    matchedID = id;
+                                    Serial.println("✓ MATCH!");
+                                    Serial.println("\n╔═══════════════════════════╗");
+                                    Serial.println("║    ✓ MATCH FOUND!         ║");
+                                    Serial.println("╠═══════════════════════════╣");
+                                    Serial.print("║    ID: #");
+                                    Serial.print(id);
+                                    if (id < 10) Serial.print(" ");
+                                    Serial.println("                  ║");
+                                    Serial.println("╚═══════════════════════════╝\n");
                                     finger->deleteModel(200);
-                                    return id;
+                                    break;
+                                } else {
+                                    Serial.println("No match");
                                 }
                             }
                         }
                         finger->deleteModel(200);
+                    } else {
+                        Serial.println("Failed to store");
                     }
                 }
             }
             
-            delay(50); // Small delay
+            delay(50);
         }
         
-        Serial.println("No match found");
-        return -1;
+        if (matchedID == -1) {
+            Serial.println("\n╔═══════════════════════════╗");
+            Serial.println("║    ✗ NO MATCH FOUND       ║");
+            Serial.println("╠═══════════════════════════╣");
+            Serial.print("║    Templates checked: ");
+            Serial.print(templatesChecked);
+            if (templatesChecked < 10) Serial.print(" ");
+            Serial.println("  ║");
+            Serial.println("╚═══════════════════════════╝\n");
+        }
+        
+        Serial.println("================================\n");
+        return matchedID;
+    }
+    
+    // Helper function to compare two template strings
+    int compareTemplates(String template1, String template2) {
+        if (template1.length() == 0 || template2.length() == 0) return 0;
+        
+        // Count matching bytes
+        int matches = 0;
+        int total = 0;
+        
+        int idx1 = 0, idx2 = 0;
+        String byte1 = "", byte2 = "";
+        
+        while (idx1 < template1.length() && idx2 < template2.length()) {
+            // Extract hex bytes
+            int comma1 = template1.indexOf(',', idx1);
+            int comma2 = template2.indexOf(',', idx2);
+            
+            if (comma1 == -1) comma1 = template1.length();
+            if (comma2 == -1) comma2 = template2.length();
+            
+            byte1 = template1.substring(idx1, comma1);
+            byte2 = template2.substring(idx2, comma2);
+            
+            if (byte1.equals(byte2)) {
+                matches++;
+            }
+            total++;
+            
+            idx1 = comma1 + 1;
+            idx2 = comma2 + 1;
+        }
+        
+        if (total == 0) return 0;
+        return (matches * 100) / total;
     }
     
     int getTemplateCount() {

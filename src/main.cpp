@@ -215,32 +215,50 @@ void verifyFingerprint() {
   
   lcd.clear();
   lcd.setCursor(0, 0);
-  lcd.print("Verifying with");
+  lcd.print("Cloud Verify");
   lcd.setCursor(0, 1);
-  lcd.print("Firebase...");
+  lcd.print("Processing...");
   
-  // Download templates from Firebase and verify (up to 100 templates)
-  int matchedID = firebaseManager.downloadAndVerify(&finger, 100);
+  // Send captured template to Firebase for cloud verification
+  int matchedID = firebaseManager.cloudVerify(&finger, 100);
   
   if (matchedID > 0) {
     lcd.clear();
     lcd.setCursor(0, 0);
-    lcd.print("Match Found!");
+    lcd.print("VERIFIED!");
     lcd.setCursor(0, 1);
-    lcd.print("ID: ");
+    lcd.print("ID: #");
     lcd.print(matchedID);
     buzzer("success");
-    Serial.print("Matched with ID #");
-    Serial.println(matchedID);
+    
+    Serial.println("\n╔══════════════════════════════╗");
+    Serial.println("║   VERIFICATION SUCCESSFUL!   ║");
+    Serial.println("╠══════════════════════════════╣");
+    Serial.print("║   Matched ID: #");
+    Serial.print(matchedID);
+    if (matchedID < 10) Serial.print(" ");
+    Serial.println("             ║");
+    Serial.println("║   Status: AUTHORIZED         ║");
+    Serial.println("╚══════════════════════════════╝");
+    Serial.println();
+    
     delay(3000);
   } else {
     lcd.clear();
     lcd.setCursor(0, 0);
-    lcd.print("No Match");
+    lcd.print("NOT VERIFIED");
     lcd.setCursor(0, 1);
-    lcd.print("Found!");
+    lcd.print("Access Denied");
     buzzer("error");
-    Serial.println("No match found");
+    
+    Serial.println("\n╔══════════════════════════════╗");
+    Serial.println("║   VERIFICATION FAILED!       ║");
+    Serial.println("╠══════════════════════════════╣");
+    Serial.println("║   Status: UNAUTHORIZED       ║");
+    Serial.println("║   No matching fingerprint    ║");
+    Serial.println("╚══════════════════════════════╝");
+    Serial.println();
+    
     delay(2000);
   }
   
