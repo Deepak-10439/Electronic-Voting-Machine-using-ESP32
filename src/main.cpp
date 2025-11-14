@@ -170,17 +170,29 @@ uint8_t enrollFingerprint(uint16_t id) {
 }
 
 void verifyFingerprint() {
+  Serial.println("Starting fingerprint verification...");
   lcd.clear();
   lcd.setCursor(0, 0);
   lcd.print("Place finger");
   lcd.setCursor(0, 1);
   lcd.print("to verify...");
   
+  Serial.println("Waiting for finger...");
   int p = -1;
-  while (p != FINGERPRINT_OK) {
+  unsigned long startTime = millis();
+  while (p != FINGERPRINT_OK && (millis() - startTime) < 30000) {  // 30 second timeout
     p = finger.getImage();
-    if (p == FINGERPRINT_NOFINGER) continue;
-    if (p != FINGERPRINT_OK) {
+    if (p == FINGERPRINT_NOFINGER) {
+      delay(50);
+      continue;
+    }
+    if (p == FINGERPRINT_OK) {
+      Serial.println("Finger detected!");
+      break;
+    }
+    if (p != FINGERPRINT_NOFINGER) {
+      Serial.print("Error getting image: ");
+      Serial.println(p);
       lcd.clear();
       lcd.setCursor(0, 0);
       lcd.print("Error reading");
@@ -189,6 +201,16 @@ void verifyFingerprint() {
       currentMode = MODE_IDLE;
       return;
     }
+  }
+  
+  if (p != FINGERPRINT_OK) {
+    Serial.println("Timeout waiting for finger");
+    lcd.clear();
+    lcd.setCursor(0, 0);
+    lcd.print("Timeout!");
+    delay(2000);
+    currentMode = MODE_IDLE;
+    return;
   }
   
   lcd.clear();
@@ -369,7 +391,7 @@ void loop() {
   // Handle different modes
   switch (currentMode) {
     case MODE_ENROLL:
-      if (firebaseReady) {
+      if (firebaseReady) {  // Check dynamically instead of static flag
         uint8_t result = enrollFingerprint(nextEnrollID);
         if (result == FINGERPRINT_OK) {
           firebaseManager.updateTemplateCount(nextEnrollID);
@@ -397,8 +419,12 @@ void loop() {
       break;
       
     case MODE_VERIFY:
-      if (firebaseReady) {
+      Serial.println("DEBUG: In MODE_VERIFY case");
+      if (firebaseReady) {  // Check dynamically instead of static flag
+        Serial.println("DEBUG: Firebase ready, calling verifyFingerprint()");
         verifyFingerprint();
+        Serial.println("DEBUG: Returned from verifyFingerprint()");
+        currentMode = MODE_IDLE;  // Ensure mode is reset
         lcd.clear();
         lcd.setCursor(0, 0);
         lcd.print("Mode: IDLE");
