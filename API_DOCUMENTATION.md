@@ -27,18 +27,23 @@ Your Django backend has been **completely updated** to work with your actual Fir
 ## 🔄 Updated API Endpoints
 
 ### 1. **Root Endpoint**
+
 ```
 GET http://127.0.0.1:8000/
 ```
+
 Returns API information and available endpoints
 
 ### 2. **Get Fingerprint Count**
+
 ```
 GET http://127.0.0.1:8000/api/fingerprints/count/
 ```
+
 Returns the count of enrolled fingerprints (currently: 3)
 
 **Example Response:**
+
 ```json
 {
   "success": true,
@@ -47,12 +52,15 @@ Returns the count of enrolled fingerprints (currently: 3)
 ```
 
 ### 3. **Get All Fingerprint Templates**
+
 ```
 GET http://127.0.0.1:8000/api/fingerprints/
 ```
+
 Returns all fingerprint templates with their data
 
 **Example Response:**
+
 ```json
 {
   "success": true,
@@ -77,12 +85,15 @@ Returns all fingerprint templates with their data
 ```
 
 ### 4. **Get Fingerprint Template by ID**
+
 ```
 GET http://127.0.0.1:8000/api/fingerprints/id/2/
 ```
+
 Get a specific template by its ID number
 
 **Example Response:**
+
 ```json
 {
   "success": true,
@@ -97,12 +108,15 @@ Get a specific template by its ID number
 ```
 
 ### 5. **Get Fingerprint Template by Key**
+
 ```
 GET http://127.0.0.1:8000/api/fingerprints/key/template_3/
 ```
+
 Get a specific template by its Firebase key
 
 **Example Response:**
+
 ```json
 {
   "success": true,
@@ -117,12 +131,15 @@ Get a specific template by its Firebase key
 ```
 
 ### 6. **Get Database Statistics**
+
 ```
 GET http://127.0.0.1:8000/api/statistics/
 ```
+
 Get comprehensive statistics about your fingerprint database
 
 **Example Response:**
+
 ```json
 {
   "success": true,
@@ -139,13 +156,16 @@ Get comprehensive statistics about your fingerprint database
 ## 🧪 Testing the API
 
 ### Using Browser
+
 Simply visit any endpoint in your browser:
+
 - http://127.0.0.1:8000/
 - http://127.0.0.1:8000/api/fingerprints/count/
 - http://127.0.0.1:8000/api/fingerprints/
 - http://127.0.0.1:8000/api/statistics/
 
 ### Using PowerShell
+
 ```powershell
 # Get fingerprint count
 Invoke-RestMethod -Uri "http://127.0.0.1:8000/api/fingerprints/count/"
@@ -161,6 +181,7 @@ Invoke-RestMethod -Uri "http://127.0.0.1:8000/api/fingerprints/id/2/"
 ```
 
 ### Using Python Requests
+
 ```python
 import requests
 
@@ -177,6 +198,7 @@ print(f"Found {data['count']} templates")
 ## 📁 Updated Files
 
 1. **firebase_service.py** - Updated with new methods:
+
    - `get_fingerprint_count()` - Get count from Firebase
    - `get_all_fingerprint_templates()` - Get all templates
    - `get_fingerprint_template_by_id()` - Get by ID
@@ -184,6 +206,7 @@ print(f"Found {data['count']} templates")
    - `get_database_statistics()` - Get statistics
 
 2. **views.py** - Updated with new view functions:
+
    - `get_all_fingerprints()`
    - `get_fingerprint_count()`
    - `get_fingerprint_by_id()`
@@ -195,30 +218,33 @@ print(f"Found {data['count']} templates")
 ## 🎯 Use Cases
 
 ### 1. Display Fingerprint Count on Dashboard
+
 ```javascript
-fetch('http://127.0.0.1:8000/api/fingerprints/count/')
-  .then(res => res.json())
-  .then(data => {
+fetch("http://127.0.0.1:8000/api/fingerprints/count/")
+  .then((res) => res.json())
+  .then((data) => {
     console.log(`Total fingerprints: ${data.fingerprint_count}`);
   });
 ```
 
 ### 2. List All Enrolled Fingerprints
+
 ```javascript
-fetch('http://127.0.0.1:8000/api/fingerprints/')
-  .then(res => res.json())
-  .then(data => {
-    data.data.forEach(template => {
+fetch("http://127.0.0.1:8000/api/fingerprints/")
+  .then((res) => res.json())
+  .then((data) => {
+    data.data.forEach((template) => {
       console.log(`ID: ${template.id}, Size: ${template.size} bytes`);
     });
   });
 ```
 
 ### 3. Get Specific Fingerprint Data
+
 ```javascript
-fetch('http://127.0.0.1:8000/api/fingerprints/id/2/')
-  .then(res => res.json())
-  .then(data => {
+fetch("http://127.0.0.1:8000/api/fingerprints/id/2/")
+  .then((res) => res.json())
+  .then((data) => {
     const template = data.data;
     console.log(`Template data: ${template.data}`);
   });
@@ -227,6 +253,7 @@ fetch('http://127.0.0.1:8000/api/fingerprints/id/2/')
 ## 📈 Current Database Status
 
 Based on your Firebase data:
+
 - **Fingerprint Count**: 3
 - **Templates Stored**: 2 (template_2 and template_3)
 - **Template IDs**: 2, 3
@@ -235,6 +262,7 @@ Based on your Firebase data:
 ## 🚀 Next Steps
 
 1. **Start the server** (if not running):
+
    ```powershell
    cd "d:\Minor Project 7th sem\Backend"
    .\venv\Scripts\Activate.ps1
@@ -250,6 +278,7 @@ Based on your Firebase data:
 ## 🔒 Data Security
 
 The fingerprint template data is:
+
 - Stored securely in Firebase
 - Accessed only through authenticated Firebase Admin SDK
 - Transmitted over HTTPS in production
