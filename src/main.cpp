@@ -221,9 +221,9 @@ void verifyFingerprint() {
   Serial.println("\n🔍 STEP 1: Local Verification (R307 Cache)");
   lcd.clear();
   lcd.setCursor(0, 0);
-  lcd.print("Local Check...");
+  lcd.print("Cloud Verify");
   lcd.setCursor(0, 1);
-  lcd.print("Searching...");
+  lcd.print("Checking...");
   
   // Convert to template
   p = finger.image2Tz();
@@ -244,9 +244,9 @@ void verifyFingerprint() {
       Serial.println("\n📡 Recording verification in blockchain...");
       lcd.clear();
       lcd.setCursor(0, 0);
-      lcd.print("Local: MATCH!");
+      lcd.print("Cloud Verify");
       lcd.setCursor(0, 1);
-      lcd.print("Updating...");
+      lcd.print("Success!");
       
       // Send to cloud for blockchain recording
       int cloudResult = firebaseManager.cloudVerify(&finger, 100);
@@ -510,9 +510,8 @@ void loop() {
       else if (currentMode == MODE_VERIFY) Serial.println("VERIFY");
       
       Serial.println("\n--- Verification Method ---");
-      Serial.println("1. Local R307 search (fast)");
-      Serial.println("2. Cloud verification (backup)");
-      Serial.println("3. Blockchain audit trail");
+      Serial.println("Cloud verification with blockchain");
+      Serial.println("Immutable audit trail");
       Serial.println("==========================\n");
     }
   }
