@@ -1,26 +1,31 @@
 # ⚠️ IMPORTANT: Wrong Firebase Credentials Format
 
 ## Current Issue:
+
 You've added the **Firebase Web Config** (for frontend JavaScript), but Django backend needs the **Firebase Admin SDK Service Account** credentials.
 
 ## How to Get the Correct Credentials:
 
 ### Step 1: Go to Firebase Console
+
 1. Visit: https://console.firebase.google.com/
 2. Select your project: **fingerprint-evm**
 
 ### Step 2: Navigate to Service Accounts
+
 1. Click the ⚙️ **Settings** (gear icon)
 2. Click **Project Settings**
 3. Go to the **Service Accounts** tab
 
 ### Step 3: Generate Private Key
+
 1. Look for "**Firebase Admin SDK**" section
 2. Click **"Generate New Private Key"** button
 3. Confirm by clicking **"Generate Key"**
 4. A JSON file will be downloaded
 
 ### Step 4: Replace the File
+
 1. The downloaded file will be named something like:
    `fingerprint-evm-firebase-adminsdk-xxxxx-xxxxxxxxxx.json`
 2. Rename it to: `firebase-credentials.json`
@@ -44,6 +49,7 @@ You've added the **Firebase Web Config** (for frontend JavaScript), but Django b
 ```
 
 ## Quick Test After Replacing:
+
 ```powershell
 cd "d:\Minor Project 7th sem\Backend"
 .\venv\Scripts\Activate.ps1

@@ -5,6 +5,7 @@
 Your Django backend is now ready! Here's what has been set up:
 
 ### Core Files Created:
+
 1. ✅ **manage.py** - Django management script
 2. ✅ **settings.py** - Django configuration with Firebase settings
 3. ✅ **urls.py** - API URL routing
@@ -20,12 +21,14 @@ Your Django backend is now ready! Here's what has been set up:
 ## 🚀 Quick Start Guide
 
 ### Option 1: Automated Setup (Recommended)
+
 ```powershell
 cd "d:\Minor Project 7th sem\Backend"
 .\setup.ps1
 ```
 
 ### Option 2: Manual Setup
+
 ```powershell
 # Navigate to Backend folder
 cd "d:\Minor Project 7th sem\Backend"
@@ -52,6 +55,7 @@ python manage.py runserver
 ## 🔥 Firebase Configuration Required
 
 ### Step 1: Get Firebase Credentials
+
 1. Go to https://console.firebase.google.com/
 2. Select your project
 3. Click **Settings** (gear icon) → **Project Settings**
@@ -60,7 +64,9 @@ python manage.py runserver
 6. Save the downloaded JSON as `firebase-credentials.json` in the Backend folder
 
 ### Step 2: Configure Environment Variables
+
 Edit the `.env` file and update:
+
 ```env
 FIREBASE_DATABASE_URL=https://your-project-id.firebaseio.com
 FIREBASE_CREDENTIALS_PATH=firebase-credentials.json
@@ -73,18 +79,22 @@ Once running, your API will be available at `http://127.0.0.1:8000`
 ### Available Endpoints:
 
 #### Root
+
 - `GET /` - API information
 
 #### Votes
+
 - `GET /api/votes/` - Get all votes
 - `GET /api/votes/{vote_id}/` - Get specific vote
 - `GET /api/votes/station/{station_id}/` - Get votes by station
 
 #### Voters
+
 - `GET /api/voters/` - Get all voters
 - `GET /api/voters/{fingerprint_id}/` - Check voter status
 
 #### Statistics
+
 - `GET /api/statistics/` - Get voting statistics
 
 ## 📊 Expected Firebase Database Structure
@@ -115,9 +125,11 @@ Your Firebase Realtime Database should have this structure:
 ## 🧪 Testing the API
 
 ### Using Browser
+
 Simply visit: `http://127.0.0.1:8000/api/votes/`
 
 ### Using PowerShell
+
 ```powershell
 # Get all votes
 Invoke-RestMethod -Uri "http://127.0.0.1:8000/api/votes/" -Method Get
@@ -127,6 +139,7 @@ Invoke-RestMethod -Uri "http://127.0.0.1:8000/api/statistics/" -Method Get
 ```
 
 ### Using curl
+
 ```bash
 curl http://127.0.0.1:8000/api/votes/
 ```
@@ -162,14 +175,17 @@ python manage.py check
 ## 🐛 Troubleshooting
 
 ### Error: "Firebase not initialized"
+
 - Ensure `firebase-credentials.json` exists
 - Check `FIREBASE_DATABASE_URL` in `.env`
 
 ### Error: "Module not found"
+
 - Activate virtual environment: `.\venv\Scripts\Activate.ps1`
 - Install dependencies: `pip install -r requirements.txt`
 
 ### Error: "Port already in use"
+
 - Run on different port: `python manage.py runserver 8080`
 - Or stop other services using port 8000
 

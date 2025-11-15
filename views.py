@@ -23,6 +23,11 @@ def index(request):
                 "GET /api/fingerprints/id/<template_id>/": "Get fingerprint template by ID",
                 "GET /api/fingerprints/key/<template_key>/": "Get fingerprint template by key (e.g., template_2)"
             },
+            "verification": {
+                "GET /api/verification/template/": "Get the captured template for verification",
+                "GET /api/verification/verify/": "Verify captured fingerprint against enrolled templates",
+                "GET /api/verification/verify/?threshold=85": "Verify with custom threshold (0-100, default: 80)"
+            },
             "statistics": {
                 "GET /api/statistics/": "Get database statistics"
             }
@@ -113,4 +118,59 @@ def get_statistics(request):
     return JsonResponse({
         "success": True,
         "data": stats
+    })
+
+
+@require_http_methods(["GET"])
+def get_verification_template(request):
+    """
+    GET /api/verification/template/
+    Get the captured fingerprint template for verification
+    """
+    template = FirebaseService.get_verification_template()
+    
+    if isinstance(template, dict) and "error" in template:
+        return JsonResponse(template, status=404)
+    
+    return JsonResponse({
+        "success": True,
+        "data": template
+    })
+
+
+@require_http_methods(["GET", "POST"])
+def verify_fingerprint(request):
+    """
+    GET /api/verification/verify/
+    POST /api/verification/verify/
+    
+    Verify the captured fingerprint against all enrolled templates
+    Optional query parameter: threshold (default: 80)
+    
+    Example: /api/verification/verify/?threshold=85
+    """
+    # Get threshold from query parameters or use default
+    threshold = request.GET.get('threshold', 80)
+    try:
+        threshold = float(threshold)
+        if threshold < 0 or threshold > 100:
+            return JsonResponse({
+                "success": False,
+                "error": "Threshold must be between 0 and 100"
+            }, status=400)
+    except ValueError:
+        return JsonResponse({
+            "success": False,
+            "error": "Invalid threshold value"
+        }, status=400)
+    
+    # Perform verification
+    result = FirebaseService.verify_fingerprint(threshold=threshold)
+    
+    if isinstance(result, dict) and "error" in result:
+        return JsonResponse(result, status=500)
+    
+    return JsonResponse({
+        "success": True,
+        "verification_result": result
     })

@@ -10,6 +10,8 @@ from views import (
     get_fingerprint_by_id,
     get_fingerprint_by_key,
     get_statistics,
+    get_verification_template,
+    verify_fingerprint,
 )
 
 urlpatterns = [
@@ -21,6 +23,10 @@ urlpatterns = [
     path('api/fingerprints/count/', get_fingerprint_count, name='get_fingerprint_count'),
     path('api/fingerprints/id/<int:template_id>/', get_fingerprint_by_id, name='get_fingerprint_by_id'),
     path('api/fingerprints/key/<str:template_key>/', get_fingerprint_by_key, name='get_fingerprint_by_key'),
+    
+    # Verification endpoints
+    path('api/verification/template/', get_verification_template, name='get_verification_template'),
+    path('api/verification/verify/', verify_fingerprint, name='verify_fingerprint'),
     
     # Statistics endpoint
     path('api/statistics/', get_statistics, name='get_statistics'),

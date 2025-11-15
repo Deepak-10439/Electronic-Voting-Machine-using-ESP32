@@ -33,16 +33,19 @@ python -m venv venv
 ### 3. Activate the virtual environment
 
 **Windows (PowerShell):**
+
 ```powershell
 .\venv\Scripts\Activate.ps1
 ```
 
 **Windows (CMD):**
+
 ```cmd
 venv\Scripts\activate.bat
 ```
 
 **Linux/Mac:**
+
 ```bash
 source venv/bin/activate
 ```
@@ -64,6 +67,7 @@ pip install -r requirements.txt
 ### 6. Set up environment variables
 
 1. Copy the example environment file:
+
    ```bash
    cp .env.example .env
    ```
@@ -91,23 +95,28 @@ The server will start at `http://127.0.0.1:8000/`
 ## API Endpoints
 
 ### Root
+
 - `GET /` - API information and available endpoints
 
 ### Votes
+
 - `GET /api/votes/` - Get all votes
 - `GET /api/votes/<vote_id>/` - Get specific vote by ID
 - `GET /api/votes/station/<station_id>/` - Get all votes from a specific station
 
 ### Voters
+
 - `GET /api/voters/` - Get all enrolled voters
 - `GET /api/voters/<fingerprint_id>/` - Get voter by fingerprint ID
 
 ### Statistics
+
 - `GET /api/statistics/` - Get voting statistics
 
 ## API Response Format
 
 ### Success Response
+
 ```json
 {
   "success": true,
@@ -117,6 +126,7 @@ The server will start at `http://127.0.0.1:8000/`
 ```
 
 ### Error Response
+
 ```json
 {
   "error": "Error message"
@@ -126,16 +136,19 @@ The server will start at `http://127.0.0.1:8000/`
 ## Example API Calls
 
 ### Get all votes
+
 ```bash
 curl http://127.0.0.1:8000/api/votes/
 ```
 
 ### Get voter status
+
 ```bash
 curl http://127.0.0.1:8000/api/voters/1/
 ```
 
 ### Get statistics
+
 ```bash
 curl http://127.0.0.1:8000/api/statistics/
 ```
@@ -177,22 +190,27 @@ The backend expects the following structure in Firebase Realtime Database:
 ## Troubleshooting
 
 ### Firebase not initialized
+
 - Ensure `firebase-credentials.json` exists in the Backend folder
 - Check that `FIREBASE_DATABASE_URL` is set correctly in `.env`
 
 ### Import errors
+
 - Make sure you've installed all dependencies: `pip install -r requirements.txt`
 - Activate your virtual environment
 
 ### Port already in use
+
 - Run on a different port: `python manage.py runserver 8080`
 
 ## Development
 
 ### Running with auto-reload
+
 The Django development server automatically reloads when you make changes to the code.
 
 ### Creating a superuser (for admin panel)
+
 ```bash
 python manage.py createsuperuser
 ```
