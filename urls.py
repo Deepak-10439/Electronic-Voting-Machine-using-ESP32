@@ -14,6 +14,10 @@ from views import (
     verify_fingerprint,
     enroll_fingerprint,
     verify_fingerprint_esp32,
+    get_blockchain_info,
+    get_audit_trail,
+    validate_blockchain,
+    record_vote,
 )
 
 urlpatterns = [
@@ -30,6 +34,12 @@ urlpatterns = [
     # Verification endpoints
     path('api/verification/template/', get_verification_template, name='get_verification_template'),
     path('api/verification/verify/', verify_fingerprint_esp32, name='verify_fingerprint_esp32'),
+    
+    # Blockchain endpoints
+    path('api/blockchain/info/', get_blockchain_info, name='get_blockchain_info'),
+    path('api/blockchain/audit/', get_audit_trail, name='get_audit_trail'),
+    path('api/blockchain/validate/', validate_blockchain, name='validate_blockchain'),
+    path('api/blockchain/vote/', record_vote, name='record_vote'),
     
     # Statistics endpoint
     path('api/statistics/', get_statistics, name='get_statistics'),

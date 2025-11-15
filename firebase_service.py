@@ -1,12 +1,14 @@
 """
-Firebase Service Module
-Handles all Firebase Realtime Database operations
+Firebase Service Module with Blockchain Integration
+Handles all Firebase Realtime Database operations and blockchain recording
 """
 
 import firebase_admin
 from firebase_admin import credentials, db
 import os
+from datetime import datetime
 from django.conf import settings
+from blockchain import get_blockchain_instance, hash_template
 
 
 class FirebaseService:
@@ -388,7 +390,9 @@ class FirebaseService:
             template_ref.set({
                 'id': template_id,
                 'data': template_data,
-                'size': template_size
+                'size': template_size,
+                'enrolled_at': datetime.now().isoformat(),
+                'status': 'active'
             })
             
             # Update count
@@ -396,7 +400,22 @@ class FirebaseService:
             current_count = count_ref.get() or 0
             count_ref.set(max(current_count, template_id))
             
-            return {"success": True, "template_id": template_id}
+            # Record enrollment in blockchain
+            blockchain = get_blockchain_instance()
+            template_hash = hash_template(template_data)
+            tx_id = blockchain.record_enrollment(
+                user_id=f"user_{template_id}",
+                fingerprint_id=template_id,
+                template_hash=template_hash,
+                esp32_ip="unknown"  # Can be enhanced to capture actual IP
+            )
+            
+            return {
+                "success": True, 
+                "template_id": template_id,
+                "blockchain_tx": tx_id,
+                "template_hash": template_hash
+            }
         
         except Exception as e:
             return {"error": str(e)}
@@ -454,12 +473,22 @@ class FirebaseService:
             # Determine if match found
             match_found = best_similarity >= threshold
             
+            # Record verification in blockchain
+            blockchain = get_blockchain_instance()
+            tx_id = blockchain.record_verification(
+                fingerprint_id=best_match_id if match_found else 0,
+                result=match_found,
+                similarity=best_similarity,
+                esp32_ip="unknown"  # Can be enhanced to capture actual IP
+            )
+            
             return {
                 "match_found": match_found,
                 "matched_id": best_match_id if match_found else None,
                 "similarity": best_similarity,
                 "threshold": threshold,
-                "message": f"Match found! ID: {best_match_id}" if match_found else "No match found"
+                "message": f"Match found! ID: {best_match_id}" if match_found else "No match found",
+                "blockchain_tx": tx_id
             }
         
         except Exception as e:
