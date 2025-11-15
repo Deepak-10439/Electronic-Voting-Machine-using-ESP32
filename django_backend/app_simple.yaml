@@ -1,0 +1,36 @@
+# Simple App Engine Configuration for ESP32 EVM Django Backend
+# Basic deployment without Cloud SQL
+
+runtime: python311
+
+# Environment variables for basic deployment
+env_variables:
+  DJANGO_SETTINGS_MODULE: evm_backend.settings
+  SECRET_KEY: "django-insecure-simple-deployment-key-change-in-production"
+  DEBUG: "False"
+  ALLOWED_HOSTS: "swift-habitat-475216-n3.appspot.com"
+
+# Basic scaling configuration
+basic_scaling:
+  max_instances: 5
+  idle_timeout: 10m
+
+# Resource allocation
+resources:
+  cpu: 1
+  memory_gb: 0.5
+  disk_size_gb: 10
+
+# Health check configuration
+readiness_check:
+  path: "/api/health/"
+  check_interval_sec: 10
+  timeout_sec: 4
+
+# Static files handling
+handlers:
+- url: /static
+  static_dir: staticfiles
+
+- url: /.*
+  script: auto

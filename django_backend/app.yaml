@@ -1,0 +1,53 @@
+# Google App Engine Configuration for ESP32 EVM Django Backend
+# Deployment configuration for production voting system
+
+runtime: python39
+
+# Environment variables for production
+env_variables:
+  DJANGO_SETTINGS_MODULE: evm_backend.settings_production
+  SECRET_KEY: "your-production-secret-key-here"
+  DEBUG: "False"
+  ALLOWED_HOSTS: "your-app-name.appspot.com,your-custom-domain.com"
+  DATABASE_URL: "postgresql://username:password@host:port/database"
+  BLOCKCHAIN_NETWORK: "mainnet"  # or "testnet" for testing
+  CORS_ALLOWED_ORIGINS: "https://your-esp32-domain.com"
+
+# Automatic scaling configuration
+automatic_scaling:
+  min_instances: 1
+  max_instances: 10
+  target_cpu_utilization: 0.6
+  target_throughput_utilization: 0.6
+
+# Resource allocation
+resources:
+  cpu: 1
+  memory_gb: 0.5
+  disk_size_gb: 10
+
+# Health check configuration
+readiness_check:
+  path: "/api/health/"
+  check_interval_sec: 10
+  timeout_sec: 4
+  failure_threshold: 2
+  success_threshold: 2
+  app_start_timeout_sec: 300
+
+liveness_check:
+  path: "/api/health/"
+  check_interval_sec: 30
+  timeout_sec: 4
+  failure_threshold: 4
+  success_threshold: 2
+
+# Static files handling
+handlers:
+- url: /static
+  static_dir: staticfiles
+  secure: always
+
+- url: /.*
+  script: auto
+  secure: always

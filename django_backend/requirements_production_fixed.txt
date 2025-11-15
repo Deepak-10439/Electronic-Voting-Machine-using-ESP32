@@ -1,0 +1,25 @@
+# Production requirements with dj-database-url
+Django==4.2.26
+djangorestframework==3.14.0
+django-cors-headers==4.3.1
+psycopg2-binary==2.9.7
+gunicorn==21.2.0
+whitenoise==6.6.0
+web3==6.11.0
+cryptography==41.0.7
+requests==2.31.0
+dj-database-url==2.1.0
+
+# GCP specific
+google-cloud-logging==3.8.0
+google-cloud-storage==2.10.0
+google-cloud-secret-manager==2.16.4
+
+# Security and monitoring
+django-environ==0.11.2
+sentry-sdk[django]==1.38.0
+celery==5.3.4
+redis==5.0.1
+
+# Development tools (remove in production if needed)
+django-extensions==3.2.3
