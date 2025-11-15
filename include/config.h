@@ -5,6 +5,9 @@
 #define WIFI_SSID "Deepak"
 #define WIFI_PASSWORD "12345678"
 
+// Backend Configuration
+#define BACKEND_URL "https://swift-habitat-475216-n3.uc.r.appspot.com"
+
 // Firebase Configuration
 // Complete Firebase config from Firebase Console > Project Settings
 

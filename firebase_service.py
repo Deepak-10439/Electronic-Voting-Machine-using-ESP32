@@ -337,3 +337,98 @@ class FirebaseService:
         
         except Exception as e:
             return {"error": str(e)}
+    
+    @classmethod
+    def enroll_fingerprint(cls, template_id, template_data, template_size):
+        """
+        Enroll a new fingerprint template to Firebase
+        
+        Args:
+            template_id: ID for the fingerprint template
+            template_data: Comma-separated hex string
+            template_size: Size of the template data
+        
+        Returns:
+            Success status or error information
+        """
+        cls.initialize()
+        
+        if not cls._initialized:
+            return {"error": "Firebase not initialized"}
+        
+        try:
+            # Store template data
+            template_key = f"template_{template_id}"
+            template_ref = cls._db_ref.child(f'fingerprints/{template_key}')
+            
+            template_ref.set({
+                'id': template_id,
+                'data': template_data,
+                'size': template_size
+            })
+            
+            # Update count
+            count_ref = cls._db_ref.child('fingerprints/count')
+            current_count = count_ref.get() or 0
+            count_ref.set(max(current_count, template_id))
+            
+            return {"success": True, "template_id": template_id}
+        
+        except Exception as e:
+            return {"error": str(e)}
+    
+    @classmethod
+    def verify_fingerprint_esp32(cls, template_data, threshold=80):
+        """
+        Verify fingerprint template sent from ESP32 against all enrolled templates
+        
+        Args:
+            template_data: Comma-separated hex string from ESP32
+            threshold: Minimum similarity percentage to consider a match (default 80%)
+        
+        Returns:
+            Dictionary with match result and matched template ID
+        """
+        cls.initialize()
+        
+        if not cls._initialized:
+            return {"error": "Firebase not initialized"}
+        
+        try:
+            # Get all enrolled templates
+            templates = cls.get_all_fingerprint_templates()
+            if isinstance(templates, dict) and "error" in templates:
+                return templates
+            
+            if not templates:
+                return {
+                    "match_found": False,
+                    "message": "No enrolled templates to compare",
+                    "matched_id": None
+                }
+            
+            # Compare with each template
+            best_match_id = None
+            best_similarity = 0.0
+            
+            for template in templates:
+                stored_data = template.get('data')
+                similarity = cls.compare_templates(template_data, stored_data, threshold)
+                
+                if similarity > best_similarity:
+                    best_similarity = similarity
+                    best_match_id = template.get('id')
+            
+            # Determine if match found
+            match_found = best_similarity >= threshold
+            
+            return {
+                "match_found": match_found,
+                "matched_id": best_match_id if match_found else None,
+                "similarity": best_similarity,
+                "threshold": threshold,
+                "message": f"Match found! ID: {best_match_id}" if match_found else "No match found"
+            }
+        
+        except Exception as e:
+            return {"error": str(e)}

@@ -21,12 +21,14 @@ def index(request):
                 "GET /api/fingerprints/": "Get all fingerprint templates",
                 "GET /api/fingerprints/count/": "Get count of enrolled fingerprints",
                 "GET /api/fingerprints/id/<template_id>/": "Get fingerprint template by ID",
-                "GET /api/fingerprints/key/<template_key>/": "Get fingerprint template by key (e.g., template_2)"
+                "GET /api/fingerprints/key/<template_key>/": "Get fingerprint template by key (e.g., template_2)",
+                "POST /api/fingerprints/enroll/": "Enroll new fingerprint template from ESP32"
             },
             "verification": {
                 "GET /api/verification/template/": "Get the captured template for verification",
                 "GET /api/verification/verify/": "Verify captured fingerprint against enrolled templates",
-                "GET /api/verification/verify/?threshold=85": "Verify with custom threshold (0-100, default: 80)"
+                "GET /api/verification/verify/?threshold=85": "Verify with custom threshold (0-100, default: 80)",
+                "POST /api/verification/verify/": "Verify fingerprint template sent from ESP32"
             },
             "statistics": {
                 "GET /api/statistics/": "Get database statistics"
@@ -174,3 +176,115 @@ def verify_fingerprint(request):
         "success": True,
         "verification_result": result
     })
+
+
+@csrf_exempt
+@require_http_methods(["POST"])
+def enroll_fingerprint(request):
+    """
+    POST /api/fingerprints/enroll/
+    Enroll a new fingerprint template sent from ESP32
+    
+    Expected JSON payload:
+    {
+        "id": 1,
+        "data": "hex,string,comma,separated",
+        "size": 534
+    }
+    """
+    try:
+        data = json.loads(request.body)
+        
+        # Validate required fields
+        required_fields = ['id', 'data', 'size']
+        for field in required_fields:
+            if field not in data:
+                return JsonResponse({
+                    "success": False,
+                    "error": f"Missing required field: {field}"
+                }, status=400)
+        
+        # Enroll fingerprint via Firebase service
+        result = FirebaseService.enroll_fingerprint(
+            template_id=data['id'],
+            template_data=data['data'],
+            template_size=data['size']
+        )
+        
+        if isinstance(result, dict) and "error" in result:
+            return JsonResponse({
+                "success": False,
+                "error": result["error"]
+            }, status=500)
+        
+        return JsonResponse({
+            "success": True,
+            "message": f"Fingerprint ID {data['id']} enrolled successfully",
+            "template_id": data['id']
+        })
+    
+    except json.JSONDecodeError:
+        return JsonResponse({
+            "success": False,
+            "error": "Invalid JSON in request body"
+        }, status=400)
+    except Exception as e:
+        return JsonResponse({
+            "success": False,
+            "error": str(e)
+        }, status=500)
+
+
+@csrf_exempt
+@require_http_methods(["POST"])
+def verify_fingerprint_esp32(request):
+    """
+    POST /api/verification/verify/
+    Verify fingerprint template sent from ESP32
+    
+    Expected JSON payload:
+    {
+        "data": "hex,string,comma,separated",
+        "threshold": 80 (optional)
+    }
+    """
+    try:
+        data = json.loads(request.body)
+        
+        # Validate required fields
+        if 'data' not in data:
+            return JsonResponse({
+                "success": False,
+                "error": "Missing required field: data"
+            }, status=400)
+        
+        # Get threshold or use default
+        threshold = data.get('threshold', 80)
+        
+        # Verify fingerprint via Firebase service
+        result = FirebaseService.verify_fingerprint_esp32(
+            template_data=data['data'],
+            threshold=threshold
+        )
+        
+        if isinstance(result, dict) and "error" in result:
+            return JsonResponse({
+                "success": False,
+                "error": result["error"]
+            }, status=500)
+        
+        return JsonResponse({
+            "success": True,
+            "verification_result": result
+        })
+    
+    except json.JSONDecodeError:
+        return JsonResponse({
+            "success": False,
+            "error": "Invalid JSON in request body"
+        }, status=400)
+    except Exception as e:
+        return JsonResponse({
+            "success": False,
+            "error": str(e)
+        }, status=500)

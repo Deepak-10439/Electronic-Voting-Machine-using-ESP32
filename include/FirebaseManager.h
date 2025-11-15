@@ -3,21 +3,21 @@
 
 #include <Arduino.h>
 #include <WiFi.h>
-#include <Firebase.h>
+#include <HTTPClient.h>
+#include <ArduinoJson.h>
 #include <Adafruit_Fingerprint.h>
 #include "config.h"
 
-// Define Firebase Data object
-FirebaseData firebaseData;
-
 class FirebaseManager {
 private:
-    FirebaseAuth auth;
-    FirebaseConfig config;
+    String backendUrl;
     bool initialized = false;
     
 public:
-    FirebaseManager() {}
+    FirebaseManager() {
+        // Set your Django backend URL here
+        backendUrl = BACKEND_URL; // Define this in config.h
+    }
     
     bool initWiFi() {
         Serial.print("Connecting to WiFi");
@@ -41,100 +41,43 @@ public:
     }
     
     bool initFirebase() {
-        Serial.println("\n=== Initializing Firebase ===");
+        // Test backend connectivity instead of direct Firebase connection
+        return testBackendConnection();
+    }
+    
+    bool testBackendConnection() {
+        Serial.println("\n=== Testing Backend Connection ===");
+        Serial.print("Backend URL: ");
+        Serial.println(backendUrl);
         
-        // Configure API Key (required for new Firebase SDK)
-        config.api_key = API_KEY;
-        Serial.print("API Key: ");
-        Serial.println(API_KEY);
+        HTTPClient http;
+        http.begin(backendUrl + "/");
+        http.addHeader("Content-Type", "application/json");
+        http.setTimeout(10000);
         
-        // Configure the database URL
-        config.database_url = DATABASE_URL;
-        Serial.print("Database URL: ");
-        Serial.println(DATABASE_URL);
+        int httpResponseCode = http.GET();
         
-        // Configure authentication
-        if (strlen(FIREBASE_AUTH) > 0) {
-            config.signer.tokens.legacy_token = FIREBASE_AUTH;
-            Serial.println("Auth: Using database secret");
-        } else {
-            Serial.println("Auth: Anonymous sign-in");
-            Serial.println("⚠ Ensure Firebase Authentication has Anonymous enabled");
-            Serial.println("⚠ And Realtime Database rules allow access:");
-            Serial.println("   {\"rules\": {\".read\": true, \".write\": true}}");
-            
-            // Sign in anonymously
-            auth.user.email = "";
-            auth.user.password = "";
-        }
-        
-        // Set timeouts
-        config.timeout.serverResponse = 10 * 1000;
-        config.timeout.rtdbKeepAlive = 45 * 1000;
-        config.timeout.rtdbStreamReconnect = 1 * 1000;
-        config.timeout.rtdbStreamError = 3 * 1000;
-        
-        // Assign the callback function for token generation
-        config.token_status_callback = nullptr;
-        
-        // Initialize Firebase with config
-        Serial.println("Calling Firebase.begin()...");
-        Firebase.begin(&config, &auth);
-        Firebase.reconnectWiFi(true);
-        
-        // Sign up anonymously if no auth token
-        if (strlen(FIREBASE_AUTH) == 0) {
-            Serial.println("Signing in anonymously...");
-            if (Firebase.signUp(&config, &auth, "", "")) {
-                Serial.println("✓ Anonymous sign-in successful");
-            } else {
-                Serial.print("✗ Anonymous sign-in failed: ");
-                Serial.println(config.signer.signupError.message.c_str());
-            }
-        }
-        
-        // Wait for Firebase to be ready
-        Serial.println("Waiting for token generation...");
-        unsigned long startWait = millis();
-        while (!Firebase.ready() && (millis() - startWait) < 10000) {
-            delay(100);
-        }
-        
-        if (Firebase.ready()) {
-            Serial.println("✓ Firebase is ready!");
-        } else {
-            Serial.println("⚠ Firebase not ready after timeout");
-        }
-        
-        delay(1000);
-        Serial.println("Testing Firebase connection...");
-        
-        // Test with a simple write
-        String testPath = "/test/connection";
-        if (Firebase.RTDB.setInt(&firebaseData, testPath.c_str(), 1)) {
-            Serial.println("✓ Firebase connection successful!");
-            Firebase.RTDB.deleteNode(&firebaseData, "/test");
+        if (httpResponseCode > 0) {
+            String response = http.getString();
+            Serial.println("✓ Backend connection successful!");
+            Serial.print("Response code: ");
+            Serial.println(httpResponseCode);
             initialized = true;
+            http.end();
             Serial.println("============================\n");
             return true;
         } else {
-            Serial.println("✗ Firebase connection failed!");
-            Serial.print("Error: ");
-            Serial.println(firebaseData.errorReason());
+            Serial.println("✗ Backend connection failed!");
+            Serial.print("Error code: ");
+            Serial.println(httpResponseCode);
             Serial.println("\n⚠ Troubleshooting:");
-            Serial.println("1. Check API Key in config.h");
-            Serial.println("2. Go to Firebase Console > Realtime Database");
-            Serial.println("3. Click on 'Rules' tab");
-            Serial.println("4. Set rules to:");
-            Serial.println("   {");
-            Serial.println("     \"rules\": {");
-            Serial.println("       \".read\": true,");
-            Serial.println("       \".write\": true");
-            Serial.println("     }");
-            Serial.println("   }");
-            Serial.println("5. Click 'Publish'");
+            Serial.println("1. Check if Django backend is running");
+            Serial.println("2. Verify backend URL in config.h");
+            Serial.println("3. Check network connectivity");
+            Serial.println("4. Ensure firewall allows connection");
             Serial.println("============================\n");
             initialized = false;
+            http.end();
             return false;
         }
     }
@@ -178,69 +121,115 @@ public:
         Serial.print(idx);
         Serial.println(" bytes");
         
-        // Convert to comma-separated hex string for Firebase
+        // Convert to comma-separated hex string
         String templateData = "";
         for (int i = 0; i < idx; i++) {
             if (i > 0) templateData += ",";
             templateData += String(bytesReceived[i], HEX);
         }
         
-        // Upload to Firebase
-        String path = "/fingerprints/template_" + String(id);
+        // Send to backend instead of Firebase
+        return enrollToBackend(id, templateData, idx);
+    }
+    
+    bool enrollToBackend(uint16_t id, String templateData, int templateSize) {
+        Serial.println("\n=== Enrolling to Backend ===");
+        Serial.print("Template ID: ");
+        Serial.println(id);
+        Serial.print("Data size: ");
+        Serial.println(templateSize);
         
-        if (Firebase.RTDB.setString(&firebaseData, path + "/data", templateData)) {
-            Serial.println("Template uploaded to Firebase!");
-            Firebase.RTDB.setInt(&firebaseData, path + "/id", id);
-            Firebase.RTDB.setInt(&firebaseData, path + "/size", idx);
-            return true;
+        HTTPClient http;
+        http.begin(backendUrl + "/api/fingerprints/enroll/");
+        http.addHeader("Content-Type", "application/json");
+        http.setTimeout(30000); // 30 second timeout for large data
+        
+        // Create JSON payload
+        DynamicJsonDocument doc(8192); // Increase size for template data
+        doc["id"] = id;
+        doc["data"] = templateData;
+        doc["size"] = templateSize;
+        
+        String jsonString;
+        serializeJson(doc, jsonString);
+        
+        Serial.println("Sending enrollment request...");
+        int httpResponseCode = http.POST(jsonString);
+        
+        if (httpResponseCode == 200) {
+            String response = http.getString();
+            
+            // Parse response
+            DynamicJsonDocument responseDoc(1024);
+            deserializeJson(responseDoc, response);
+            
+            bool success = responseDoc["success"];
+            if (success) {
+                Serial.println("✓ Template enrolled successfully via backend!");
+                Serial.print("Message: ");
+                Serial.println(responseDoc["message"].as<String>());
+                http.end();
+                return true;
+            } else {
+                Serial.println("✗ Backend enrollment failed");
+                Serial.print("Error: ");
+                Serial.println(responseDoc["error"].as<String>());
+                http.end();
+                return false;
+            }
         } else {
-            Serial.println("Failed to upload template");
-            Serial.println(firebaseData.errorReason());
+            String response = http.getString();
+            Serial.println("✗ Failed to enroll template via backend");
+            Serial.print("HTTP Code: ");
+            Serial.println(httpResponseCode);
+            Serial.print("Response: ");
+            Serial.println(response);
+            http.end();
             return false;
         }
     }
     
     int cloudVerify(Adafruit_Fingerprint* finger, int maxTemplates = 100) {
-        Serial.println("\n=== ⚡ Ultra-Fast Cloud Verification ===");
-        Serial.println("📤 Uploading captured template to Firebase...");
+        Serial.println("\n=== Backend Verification ===");
+        Serial.println("Converting captured image to template...");
         
-        // Convert the captured image to a template
+        // Convert the captured image to a template in slot 1
         uint8_t p = finger->image2Tz(1);
         if (p != FINGERPRINT_OK) {
-            Serial.println("✗ Failed to convert image to template");
+            Serial.println("✗ Failed to convert image");
             Serial.print("Error code: ");
             Serial.println(p);
             return -1;
         }
-        Serial.println("✅ Template created from captured image");
+        Serial.println("✓ Template created in slot 1");
         
-        // Store temporarily in slot 250
-        p = finger->storeModel(250);
-        if (p != FINGERPRINT_OK) {
-            Serial.println("✗ Failed to store temporary template");
-            return -1;
-        }
-        
-        // Get template data
-        p = finger->loadModel(250);
-        if (p != FINGERPRINT_OK) {
-            Serial.println("✗ Failed to load template");
-            finger->deleteModel(250);
-            return -1;
-        }
-        
-        // Download template bytes
-        p = finger->getModel();
-        if (p != FINGERPRINT_OK) {
-            Serial.println("✗ Failed to transfer template");
-            finger->deleteModel(250);
-            return -1;
-        }
-        
-        // Read template bytes
+        // Get template from sensor
+        Serial.println("Downloading template for verification...");
         uint8_t bytesReceived[534];
         memset(bytesReceived, 0xff, 534);
         
+        // Store in temporary slot for download
+        p = finger->storeModel(199);
+        if (p != FINGERPRINT_OK) {
+            Serial.println("Failed to store temporary template");
+            return -1;
+        }
+        
+        p = finger->loadModel(199);
+        if (p != FINGERPRINT_OK) {
+            Serial.println("Failed to load temporary template");
+            finger->deleteModel(199);
+            return -1;
+        }
+        
+        p = finger->getModel();
+        if (p != FINGERPRINT_OK) {
+            Serial.println("Failed to get template");
+            finger->deleteModel(199);
+            return -1;
+        }
+        
+        // Read template data
         int idx = 0;
         unsigned long startTime = millis();
         while (idx < 534 && (millis() - startTime) < 5000) {
@@ -249,185 +238,128 @@ public:
             }
         }
         
-        Serial.print("📦 Captured ");
-        Serial.print(idx);
-        Serial.println(" bytes template");
+        // Clean up temporary slot
+        finger->deleteModel(199);
         
-        // Convert to hex string
-        String capturedTemplate = "";
-        for (int i = 0; i < idx; i++) {
-            if (i > 0) capturedTemplate += ",";
-            capturedTemplate += String(bytesReceived[i], HEX);
-        }
-        
-        // Upload captured template to Firebase for comparison
-        String verifyPath = "/verification/captured_template";
-        if (!Firebase.RTDB.setString(&firebaseData, verifyPath, capturedTemplate)) {
-            Serial.println("✗ Failed to upload captured template");
-            Serial.println(firebaseData.errorReason());
-            finger->deleteModel(250);
+        if (idx < 100) {
+            Serial.println("Failed to read sufficient template data");
             return -1;
         }
-        Serial.println("✅ Template uploaded to Firebase successfully");
         
-        // 🚀 Now do cloud-based template matching
-        Serial.println("🔍 Cloud matching against stored templates...");
-        int matchedID = -1;
-        int templatesChecked = 0;
+        Serial.print("Read ");
+        Serial.print(idx);
+        Serial.println(" bytes for verification");
         
-        for (int id = 1; id <= maxTemplates; id++) {
-            String pathData = "/fingerprints/template_" + String(id) + "/data";
+        // Convert to hex string
+        String templateData = "";
+        for (int i = 0; i < idx; i++) {
+            if (i > 0) templateData += ",";
+            templateData += String(bytesReceived[i], HEX);
+        }
+        
+        // Send to backend for verification
+        return verifyWithBackend(templateData);
+    }
+    
+    int verifyWithBackend(String templateData) {
+        Serial.println("Sending verification data to backend...");
+        
+        HTTPClient http;
+        http.begin(backendUrl + "/api/verification/verify/");
+        http.addHeader("Content-Type", "application/json");
+        http.setTimeout(30000); // 30 second timeout
+        
+        // Create JSON payload
+        DynamicJsonDocument doc(8192);
+        doc["data"] = templateData;
+        doc["threshold"] = 80; // Set your desired threshold
+        
+        String jsonString;
+        serializeJson(doc, jsonString);
+        
+        int httpResponseCode = http.POST(jsonString);
+        
+        if (httpResponseCode == 200) {
+            String response = http.getString();
             
-            if (Firebase.RTDB.getString(&firebaseData, pathData)) {
-                String storedTemplate = firebaseData.stringData();
-                
-                if (storedTemplate.length() > 10) {
-                    templatesChecked++;
-                    Serial.print("  🔎 [");
-                    Serial.print(templatesChecked);
-                    Serial.print("] Checking ID #");
-                    Serial.print(id);
-                    Serial.print("... ");
+            // Parse response
+            DynamicJsonDocument responseDoc(1024);
+            deserializeJson(responseDoc, response);
+            
+            bool success = responseDoc["success"];
+            if (success) {
+                bool matchFound = responseDoc["verification_result"]["match_found"];
+                if (matchFound) {
+                    int matchedId = responseDoc["verification_result"]["matched_id"];
+                    float similarity = responseDoc["verification_result"]["similarity"];
                     
-                    // Enhanced template matching algorithm
-                    int matchScore = compareTemplatesAdvanced(capturedTemplate, storedTemplate);
-                    
-                    Serial.print("Match: ");
-                    Serial.print(matchScore);
+                    Serial.println("✓ Verification successful via backend!");
+                    Serial.print("Matched ID: ");
+                    Serial.println(matchedId);
+                    Serial.print("Similarity: ");
+                    Serial.print(similarity);
                     Serial.println("%");
                     
-                    if (matchScore >= 80) {  // 80% or higher similarity for faster matching
-                        matchedID = id;
-                        Serial.println("\n🎯 PERFECT MATCH FOUND!");
-                        Serial.println("╔═══════════════════════════════╗");
-                        Serial.println("║  ✅ VERIFICATION SUCCESSFUL!  ║");
-                        Serial.println("╠═══════════════════════════════╣");
-                        Serial.print("║  🆔 Matched ID: #");
-                        Serial.print(id);
-                        if (id < 10) Serial.print(" ");
-                        Serial.println("             ║");
-                        Serial.print("║  📊 Confidence: ");
-                        Serial.print(matchScore);
-                        Serial.println("%           ║");
-                        Serial.print("║  ⚡ Speed: Ultra-Fast        ║");
-                        Serial.println("╚═══════════════════════════════╝");
-                        break;
-                    }
+                    http.end();
+                    return matchedId;
+                } else {
+                    Serial.println("✗ No match found via backend");
+                    Serial.print("Message: ");
+                    Serial.println(responseDoc["verification_result"]["message"].as<String>());
+                    http.end();
+                    return -1;
                 }
-            }
-        }
-        
-        if (matchedID == -1) {
-            Serial.println("\n❌ NO MATCH FOUND");
-            Serial.println("╔═══════════════════════════════╗");
-            Serial.println("║  ❌ VERIFICATION FAILED!      ║");
-            Serial.println("╠═══════════════════════════════╣");
-            Serial.print("║  📊 Templates checked: ");
-            Serial.print(templatesChecked);
-            if (templatesChecked < 10) Serial.print(" ");
-            Serial.println("      ║");
-            Serial.println("║  🚫 Access Denied             ║");
-            Serial.println("╚═══════════════════════════════╝");
-        }
-        
-        // 🗑️ Clean up verification data from Firebase for security and speed
-        Serial.println("🗑️ Cleaning up verification data...");
-        Firebase.RTDB.deleteNode(&firebaseData, "/verification");
-        finger->deleteModel(250);
-        Serial.println("✅ Cleanup complete");
-        
-        Serial.println("===================================\n");
-        return matchedID;
-    }
-    
-    // Enhanced template matching algorithm for better accuracy
-    int compareTemplatesAdvanced(String template1, String template2) {
-        if (template1.length() == 0 || template2.length() == 0) return 0;
-        
-        // Count matching segments with weighted scoring
-        int exactMatches = 0;
-        int partialMatches = 0;
-        int totalSegments = 0;
-        
-        // Split templates into segments for comparison
-        int segmentSize = 20; // Compare in chunks of 20 hex values
-        
-        for (int pos = 0; pos < min(template1.length(), template2.length()); pos += segmentSize * 3) {
-            String seg1 = template1.substring(pos, min(pos + segmentSize * 3, (int)template1.length()));
-            String seg2 = template2.substring(pos, min(pos + segmentSize * 3, (int)template2.length()));
-            
-            totalSegments++;
-            
-            if (seg1.equals(seg2)) {
-                exactMatches += 2; // Exact match gets double points
             } else {
-                // Check for partial similarity
-                int similarities = 0;
-                int minLen = min(seg1.length(), seg2.length());
-                
-                for (int i = 0; i < minLen; i++) {
-                    if (seg1.charAt(i) == seg2.charAt(i)) {
-                        similarities++;
-                    }
-                }
-                
-                if (similarities > minLen * 0.6) { // 60% character similarity
-                    partialMatches++;
-                }
+                Serial.println("✗ Backend verification failed");
+                Serial.print("Error: ");
+                Serial.println(responseDoc["error"].as<String>());
+                http.end();
+                return -1;
             }
+        } else {
+            String response = http.getString();
+            Serial.println("✗ Failed to verify with backend");
+            Serial.print("HTTP Code: ");
+            Serial.println(httpResponseCode);
+            Serial.print("Response: ");
+            Serial.println(response);
+            http.end();
+            return -1;
         }
-        
-        if (totalSegments == 0) return 0;
-        
-        // Calculate weighted score
-        int score = ((exactMatches * 100) + (partialMatches * 40)) / (totalSegments * 2);
-        return min(score, 100);
-    }
-    
-    // Helper function to compare two template strings
-    int compareTemplates(String template1, String template2) {
-        if (template1.length() == 0 || template2.length() == 0) return 0;
-        
-        // Count matching bytes
-        int matches = 0;
-        int total = 0;
-        
-        int idx1 = 0, idx2 = 0;
-        String byte1 = "", byte2 = "";
-        
-        while (idx1 < template1.length() && idx2 < template2.length()) {
-            // Extract hex bytes
-            int comma1 = template1.indexOf(',', idx1);
-            int comma2 = template2.indexOf(',', idx2);
-            
-            if (comma1 == -1) comma1 = template1.length();
-            if (comma2 == -1) comma2 = template2.length();
-            
-            byte1 = template1.substring(idx1, comma1);
-            byte2 = template2.substring(idx2, comma2);
-            
-            if (byte1.equals(byte2)) {
-                matches++;
-            }
-            total++;
-            
-            idx1 = comma1 + 1;
-            idx2 = comma2 + 1;
-        }
-        
-        if (total == 0) return 0;
-        return (matches * 100) / total;
     }
     
     int getTemplateCount() {
-        if (Firebase.RTDB.getInt(&firebaseData, "/fingerprints/count")) {
-            return firebaseData.intData();
+        HTTPClient http;
+        http.begin(backendUrl + "/api/fingerprints/count/");
+        http.setTimeout(10000);
+        
+        int httpResponseCode = http.GET();
+        
+        if (httpResponseCode == 200) {
+            String response = http.getString();
+            
+            DynamicJsonDocument doc(1024);
+            deserializeJson(doc, response);
+            
+            if (doc["success"]) {
+                int count = doc["fingerprint_count"];
+                http.end();
+                return count;
+            }
         }
+        
+        http.end();
         return 0;
     }
     
     void updateTemplateCount(int count) {
-        Firebase.RTDB.setInt(&firebaseData, "/fingerprints/count", count);
+        // Count is automatically updated by backend during enrollment
+        Serial.print("Template count updated: ");
+        Serial.println(count);
+    }
+    
+    void setBackendUrl(String url) {
+        backendUrl = url;
     }
 };
 
