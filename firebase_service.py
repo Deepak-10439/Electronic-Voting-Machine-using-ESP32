@@ -231,15 +231,15 @@ class FirebaseService:
             return {"error": str(e)}
     
     @classmethod
-    def compare_templates(cls, template1_data, template2_data, threshold=80):
+    def compare_templates(cls, template1_data, template2_data, threshold=70):
         """
-        Compare two fingerprint templates
+        Compare two fingerprint templates using fuzzy matching
         Returns similarity percentage (0-100)
         
         Args:
             template1_data: Comma-separated hex string
             template2_data: Comma-separated hex string
-            threshold: Minimum similarity percentage to consider a match (default 80%)
+            threshold: Minimum similarity percentage to consider a match (default 70%)
         """
         try:
             # Convert comma-separated strings to lists
@@ -250,15 +250,39 @@ class FirebaseService:
             if len(bytes1) != len(bytes2):
                 return 0.0
             
-            # Count matching bytes
-            matches = sum(1 for b1, b2 in zip(bytes1, bytes2) if b1.strip() == b2.strip())
+            # Count matching bytes and similar bytes (within tolerance)
+            exact_matches = 0
+            similar_matches = 0
+            total_bytes = len(bytes1)
             
-            # Calculate similarity percentage
-            similarity = (matches / len(bytes1)) * 100
+            for b1, b2 in zip(bytes1, bytes2):
+                try:
+                    val1 = int(b1.strip(), 16) if b1.strip() else 0
+                    val2 = int(b2.strip(), 16) if b2.strip() else 0
+                    
+                    if val1 == val2:
+                        exact_matches += 1
+                        similar_matches += 1
+                    elif abs(val1 - val2) <= 15:  # Allow small variations (within ~6% of 255)
+                        similar_matches += 1
+                except ValueError:
+                    # If conversion fails, treat as non-match
+                    continue
             
-            return round(similarity, 2)
-        
+            # Calculate weighted similarity (exact matches weight more)
+            exact_weight = 0.7
+            similar_weight = 0.3
+            
+            exact_similarity = (exact_matches / total_bytes) * 100
+            similar_similarity = (similar_matches / total_bytes) * 100
+            
+            # Weighted final similarity
+            final_similarity = (exact_similarity * exact_weight) + (similar_similarity * similar_weight)
+            
+            return round(final_similarity, 2)
+            
         except Exception as e:
+            print(f"Template comparison error: {e}")
             return 0.0
     
     @classmethod
@@ -378,13 +402,13 @@ class FirebaseService:
             return {"error": str(e)}
     
     @classmethod
-    def verify_fingerprint_esp32(cls, template_data, threshold=80):
+    def verify_fingerprint_esp32(cls, template_data, threshold=65):
         """
         Verify fingerprint template sent from ESP32 against all enrolled templates
         
         Args:
             template_data: Comma-separated hex string from ESP32
-            threshold: Minimum similarity percentage to consider a match (default 80%)
+            threshold: Minimum similarity percentage to consider a match (default 65%)
         
         Returns:
             Dictionary with match result and matched template ID
@@ -411,13 +435,21 @@ class FirebaseService:
             best_match_id = None
             best_similarity = 0.0
             
+            print(f"Comparing against {len(templates)} enrolled templates...")
+            
             for template in templates:
+                template_id = template.get('id')
                 stored_data = template.get('data')
                 similarity = cls.compare_templates(template_data, stored_data, threshold)
                 
+                print(f"Template ID {template_id}: {similarity}% similarity")
+                
                 if similarity > best_similarity:
                     best_similarity = similarity
-                    best_match_id = template.get('id')
+                    best_match_id = template_id
+            
+            print(f"Best match: ID {best_match_id} with {best_similarity}% similarity")
+            print(f"Threshold: {threshold}%")
             
             # Determine if match found
             match_found = best_similarity >= threshold
