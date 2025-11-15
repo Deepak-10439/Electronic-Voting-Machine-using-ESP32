@@ -217,9 +217,9 @@ void verifyFingerprint() {
   lcd.setCursor(0, 0);
   lcd.print("Cloud Verify");
   lcd.setCursor(0, 1);
-  lcd.print("Processing...");
+  lcd.print("Ultra-Fast...");
   
-  // Send captured template to Firebase for cloud verification
+  // Send captured template to Firebase for ultra-fast cloud verification
   int matchedID = firebaseManager.cloudVerify(&finger, 100);
   
   if (matchedID > 0) {
