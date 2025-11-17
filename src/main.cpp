@@ -1,24 +1,26 @@
 #include <LiquidCrystal_I2C.h>
 #include <Adafruit_Fingerprint.h>
 #include <WiFi.h>
+#include <HTTPClient.h>
+#include <ArduinoJson.h>
 #include "config.h"
-#include "FirebaseManager.h"
 
 #define buzzerPin 25
 
 enum Mode {
   MODE_IDLE,
   MODE_ENROLL,
-  MODE_VERIFY
+  MODE_VOTE
 };
 
 LiquidCrystal_I2C lcd(0x27, 16, 2);
 Adafruit_Fingerprint finger = Adafruit_Fingerprint(&Serial2);
-FirebaseManager firebaseManager;
 
 Mode currentMode = MODE_IDLE;
 int nextEnrollID = 1;
-bool firebaseReady = false;
+bool wifiReady = false;
+String backendUrl = BACKEND_URL;
+String blockchainUrl = BLOCKCHAIN_URL;
 
 void lcdPrint(uint8_t row, uint8_t position, String message) {
   lcd.setCursor(position, row);
@@ -49,6 +51,208 @@ void buzzer(String type) {
     delay(500);
     digitalWrite(buzzerPin, LOW);
   }
+}
+
+bool submitVoteToBackend(int voterId, String candidate) {
+  Serial.println("\n=== Submitting Vote");
+  Serial.print("Voter ID: ");
+  Serial.println(voterId);
+  Serial.print("Candidate: ");
+  Serial.println(candidate);
+  
+  HTTPClient http;
+  http.begin(backendUrl + "/api/vote/");
+  http.addHeader("Content-Type", "application/json");
+  http.setTimeout(15000);
+  
+  // Create JSON payload
+  JsonDocument doc;
+  doc["voterId"] = voterId;
+  doc["candidate"] = candidate;
+  
+  String jsonString;
+  serializeJson(doc, jsonString);
+  
+  Serial.print("Sending: ");
+  Serial.println(jsonString);
+  
+  int httpResponseCode = http.POST(jsonString);
+  
+  if (httpResponseCode == 200 || httpResponseCode == 201) {
+    String response = http.getString();
+    Serial.println("✓ Vote submitted successfully!");
+    Serial.print("Response: ");
+    Serial.println(response);
+    http.end();
+    return true;
+  } else {
+    String response = http.getString();
+    Serial.println("✗ Failed to submit vote to backend");
+    Serial.print("HTTP Code: ");
+    Serial.println(httpResponseCode);
+    Serial.print("Response: ");
+    Serial.println(response);
+    http.end();
+    return false;
+  }
+}
+
+bool submitVoteToBlockchain(int voterId, String candidate) {
+  Serial.print("Voter ID: ");
+  Serial.println(voterId);
+  Serial.print("Candidate: ");
+  Serial.println(candidate);
+  
+  HTTPClient http;
+  http.begin(backendUrl + "/api/blockchain/vote/");
+  http.addHeader("Content-Type", "application/json");
+  http.setTimeout(15000);
+  
+  // Create JSON payload for blockchain
+  JsonDocument doc;
+  doc["user_id"] = String(voterId);
+  doc["vote_choice"] = candidate;
+  doc["election_id"] = "evm_2024";
+  
+  String jsonString;
+  serializeJson(doc, jsonString);
+  
+  Serial.print("Sending: ");
+  Serial.println(jsonString);
+  
+  int httpResponseCode = http.POST(jsonString);
+  
+  if (httpResponseCode == 200 || httpResponseCode == 201) {
+    String response = http.getString();
+    http.end();
+    return true;
+  } else {
+    String response = http.getString();
+    Serial.println("✗ Failed to submit vote to blockchain");
+    Serial.print("HTTP Code: ");
+    Serial.println(httpResponseCode);
+    Serial.print("Response: ");
+    Serial.println(response);
+    http.end();
+    return false;
+  }
+}
+
+String getCandidateName(int choice) {
+  switch(choice) {
+    case 1: return "USAR";
+    case 2: return "USAP";
+    case 3: return "USDI";
+    default: return "INVALID";
+  }
+}
+
+void handleVoting(int voterId) {
+  Serial.println("Select your candidate:");
+  Serial.println("1. USAR");
+  Serial.println("2. USAP");
+  Serial.println("3. USDI");
+  Serial.println("Enter choice: ");
+  
+  lcd.clear();
+  lcd.setCursor(0, 0);
+  lcd.print("Select candidate:");
+  lcd.setCursor(0, 1);
+  lcd.print("1=USAR 2=USAP 3=USDI");
+  
+  // Wait for serial input
+  while (!Serial.available()) {
+    delay(100);
+  }
+  
+  int choice = Serial.parseInt();
+  while (Serial.available()) Serial.read(); // Clear buffer
+  
+  if (choice < 1 || choice > 3) {
+    Serial.println("\n❌ Invalid choice! Please select 1, 2, or 3.");
+    lcd.clear();
+    lcd.setCursor(0, 0);
+    lcd.print("Invalid Choice!");
+    lcd.setCursor(0, 1);
+    lcd.print("Try Again");
+    buzzer("error");
+    delay(2000);
+    return;
+  }
+  
+  String candidate = getCandidateName(choice);
+  
+  Serial.println("\n✓ Vote Selection:");
+  Serial.print("Voter ID: ");
+  Serial.println(voterId);
+  Serial.print("Candidate: ");
+  Serial.println(candidate);
+  
+  lcd.clear();
+  lcd.setCursor(0, 0);
+  lcd.print("Voting for:");
+  lcd.setCursor(0, 1);
+  lcd.print(candidate);
+  delay(2000);
+  
+  // Show processing
+  lcd.clear();
+  lcd.setCursor(0, 0);
+  lcd.print("Processing...");
+  lcd.setCursor(0, 1);
+  lcd.print("Please wait");
+  
+  // Submit vote to backend first
+  bool backendSuccess = submitVoteToBackend(voterId, candidate);
+  
+  if (!backendSuccess) {
+    Serial.println("\n❌ Backend vote submission failed!");
+    lcd.clear();
+    lcd.setCursor(0, 0);
+    lcd.print("Backend Error!");
+    lcd.setCursor(0, 1);
+    lcd.print("Vote Failed");
+    buzzer("error");
+    delay(3000);
+    return;
+  }
+  
+  // Submit vote to blockchain
+  bool blockchainSuccess = submitVoteToBlockchain(voterId, candidate);
+  
+  if (!blockchainSuccess) {
+    Serial.println("\n⚠ Blockchain submission failed, but backend vote recorded!");
+    lcd.clear();
+    lcd.setCursor(0, 0);
+    lcd.print("Partial Success");
+    lcd.setCursor(0, 1);
+    lcd.print("Backend OK");
+    buzzer("error");
+    delay(3000);
+    return;
+  }
+  
+  // Both successful
+  Serial.println("\n✅ VOTE SUCCESSFULLY RECORDED!");
+  Serial.print("Voter ID: #");
+  Serial.print(voterId);
+  if (voterId < 10) Serial.print(" ");
+  Serial.println("");
+  Serial.print("║   Candidate: ");
+  Serial.print(candidate);
+  Serial.println("             ║");
+  
+  lcd.clear();
+  lcd.setCursor(0, 0);
+  lcd.print("VOTE RECORDED!");
+  lcd.setCursor(0, 1);
+  lcd.print("ID:");
+  lcd.print(voterId);
+  lcd.print(" -> ");
+  lcd.print(candidate);
+  
+  buzzer("success");
+  delay(5000);
 }
 
 uint8_t enrollFingerprint(uint16_t id) {
@@ -134,20 +338,9 @@ uint8_t enrollFingerprint(uint16_t id) {
     return p;
   }
   
-  // Store model locally (optional, for backup)
+  // Store model locally
   p = finger.storeModel(id);
   if (p == FINGERPRINT_OK) {
-    Serial.println("Stored locally!");
-  }
-  
-  // Upload to Firebase
-  lcd.clear();
-  lcd.setCursor(0, 0);
-  lcd.print("Uploading to");
-  lcd.setCursor(0, 1);
-  lcd.print("Firebase...");
-  
-  if (firebaseManager.uploadTemplate(id, &finger)) {
     lcd.clear();
     lcd.setCursor(0, 0);
     lcd.print("Enrolled!");
@@ -162,23 +355,21 @@ uint8_t enrollFingerprint(uint16_t id) {
   } else {
     lcd.clear();
     lcd.setCursor(0, 0);
-    lcd.print("Upload failed");
+    lcd.print("Store failed");
     buzzer("error");
     delay(2000);
-    return FINGERPRINT_PACKETRECIEVEERR;
+    return p;
   }
 }
 
-void verifyFingerprint() {
-  Serial.println("\n=== HYBRID VERIFICATION MODE ===");
-  Serial.println("1. Local verification (R307 cache)");
-  Serial.println("2. Cloud verification (if local fails)");
+void verifyForVoting() {
+  Serial.println("\n=== VOTER VERIFICATION ===");
   
   lcd.clear();
   lcd.setCursor(0, 0);
   lcd.print("Place finger");
   lcd.setCursor(0, 1);
-  lcd.print("to verify...");
+  lcd.print("to vote...");
   
   Serial.println("Waiting for finger placement...");
   int p = -1;
@@ -190,7 +381,7 @@ void verifyFingerprint() {
   while (p != FINGERPRINT_OK && (millis() - startTime) < 30000) {
     p = finger.getImage();
     if (p == FINGERPRINT_NOFINGER) {
-      delay(100);  // Increased delay for stability
+      delay(100);
       continue;
     }
     if (p == FINGERPRINT_OK) {
@@ -201,8 +392,8 @@ void verifyFingerprint() {
       Serial.print("⚠ Error getting image (Code: ");
       Serial.print(p);
       Serial.println("). Retrying...");
-      delay(200);  // Wait before retry
-      continue;    // Don't exit, keep trying
+      delay(200);
+      continue;
     }
   }
   
@@ -217,13 +408,11 @@ void verifyFingerprint() {
     return;
   }
   
-  // Step 1: Try local verification first (R307 cache)
-  Serial.println("\n🔍 STEP 1: Local Verification (R307 Cache)");
   lcd.clear();
   lcd.setCursor(0, 0);
-  lcd.print("Cloud Verify");
+  lcd.print("Verifying...");
   lcd.setCursor(0, 1);
-  lcd.print("Checking...");
+  lcd.print("Please wait");
   
   // Convert to template
   p = finger.image2Tz();
@@ -234,110 +423,49 @@ void verifyFingerprint() {
     p = finger.fingerSearch();
     if (p == FINGERPRINT_OK) {
       // Local match found!
-      Serial.println("✅ LOCAL MATCH FOUND!");
-      Serial.print("   Local ID: ");
+      Serial.println("✅ VOTER VERIFIED!");
+      Serial.print("   Voter ID: ");
       Serial.println(finger.fingerID);
       Serial.print("   Confidence: ");
       Serial.println(finger.confidence);
       
-      // Verify with cloud for blockchain audit trail
-      Serial.println("\n📡 Recording verification in blockchain...");
-      lcd.clear();
-      lcd.setCursor(0, 0);
-      lcd.print("Cloud Verify");
-      lcd.setCursor(0, 1);
-      lcd.print("Success!");
-      
-      // Send to cloud for blockchain recording
-      int cloudResult = firebaseManager.cloudVerify(&finger, 100);
-      
-      // Show success
       lcd.clear();
       lcd.setCursor(0, 0);
       lcd.print("VERIFIED!");
       lcd.setCursor(0, 1);
-      lcd.print("ID: #");
+      lcd.print("Voter ID: #");
       lcd.print(finger.fingerID);
       buzzer("success");
       
-      Serial.println("\n╔══════════════════════════════╗");
-      Serial.println("║   VERIFICATION SUCCESSFUL!   ║");
-      Serial.println("╠══════════════════════════════╣");
-      Serial.print("║   Local ID: #");
-      Serial.print(finger.fingerID);
-      if (finger.fingerID < 10) Serial.print(" ");
-      Serial.println("              ║");
-      Serial.print("║   Confidence: ");
-      Serial.print(finger.confidence);
-      if (finger.confidence < 100) Serial.print(" ");
-      Serial.println("            ║");
-      Serial.println("║   Method: LOCAL + BLOCKCHAIN ║");
-      Serial.println("║   Status: AUTHORIZED         ║");
-      Serial.println("╚══════════════════════════════╝");
-      Serial.println();
+      delay(2000);
       
-      delay(3000);
+      // Proceed to voting
+      handleVoting(finger.fingerID);
+      
       currentMode = MODE_IDLE;
       return;
     }
   }
   
-  // Step 2: Local verification failed, try cloud verification
-  Serial.println("\n🌐 STEP 2: Cloud Verification (No local match)");
+  // Verification failed
+  Serial.println("❌ VOTER NOT VERIFIED");
+  
   lcd.clear();
   lcd.setCursor(0, 0);
-  lcd.print("Cloud Verify");
+  lcd.print("NOT VERIFIED");
   lcd.setCursor(0, 1);
-  lcd.print("Checking...");
+  lcd.print("Access Denied");
+  buzzer("error");
   
-  int matchedID = firebaseManager.cloudVerify(&finger, 100);
+  Serial.println("\n╔══════════════════════════════╗");
+  Serial.println("║   VERIFICATION FAILED!       ║");
+  Serial.println("╠══════════════════════════════╣");
+  Serial.println("║   Status: UNAUTHORIZED       ║");
+  Serial.println("║   Cannot Vote                ║");
+  Serial.println("╚══════════════════════════════╝");
+  Serial.println();
   
-  if (matchedID > 0) {
-    Serial.println("✅ CLOUD MATCH FOUND!");
-    
-    lcd.clear();
-    lcd.setCursor(0, 0);
-    lcd.print("VERIFIED!");
-    lcd.setCursor(0, 1);
-    lcd.print("ID: #");
-    lcd.print(matchedID);
-    buzzer("success");
-    
-    Serial.println("\n╔══════════════════════════════╗");
-    Serial.println("║   VERIFICATION SUCCESSFUL!   ║");
-    Serial.println("╠══════════════════════════════╣");
-    Serial.print("║   Cloud ID: #");
-    Serial.print(matchedID);
-    if (matchedID < 10) Serial.print(" ");
-    Serial.println("             ║");
-    Serial.println("║   Method: CLOUD ONLY         ║");
-    Serial.println("║   Status: AUTHORIZED         ║");
-    Serial.println("╚══════════════════════════════╝");
-    Serial.println();
-    
-    delay(3000);
-  } else {
-    Serial.println("❌ NO MATCH FOUND (Local + Cloud)");
-    
-    lcd.clear();
-    lcd.setCursor(0, 0);
-    lcd.print("NOT VERIFIED");
-    lcd.setCursor(0, 1);
-    lcd.print("Access Denied");
-    buzzer("error");
-    
-    Serial.println("\n╔══════════════════════════════╗");
-    Serial.println("║   VERIFICATION FAILED!       ║");
-    Serial.println("╠══════════════════════════════╣");
-    Serial.println("║   Local: NO MATCH            ║");
-    Serial.println("║   Cloud: NO MATCH            ║");
-    Serial.println("║   Status: UNAUTHORIZED       ║");
-    Serial.println("╚══════════════════════════════╝");
-    Serial.println();
-    
-    delay(2000);
-  }
-  
+  delay(2000);
   currentMode = MODE_IDLE;
 }
 
@@ -378,12 +506,29 @@ void setup() {
   lcd.clear();
   lcd.setCursor(0, 0);
   lcd.print("Connecting WiFi");
-  if (firebaseManager.initWiFi()) {
+  
+  Serial.print("Connecting to WiFi");
+  WiFi.begin(WIFI_SSID, WIFI_PASSWORD);
+  
+  int attempts = 0;
+  while (WiFi.status() != WL_CONNECTED && attempts < 20) {
+    delay(500);
+    Serial.print(".");
+    attempts++;
+  }
+  
+  if (WiFi.status() == WL_CONNECTED) {
+    Serial.println("\nWiFi Connected!");
+    Serial.print("IP Address: ");
+    Serial.println(WiFi.localIP());
+    
     lcd.clear();
     lcd.setCursor(0, 0);
     lcd.print("WiFi Connected!");
+    wifiReady = true;
     delay(1000);
   } else {
+    Serial.println("\nWiFi Connection Failed!");
     lcd.clear();
     lcd.setCursor(0, 0);
     lcd.print("WiFi Failed!");
@@ -391,46 +536,23 @@ void setup() {
     delay(2000);
   }
   
-  // Initialize Firebase
-  lcd.clear();
-  lcd.setCursor(0, 0);
-  lcd.print("Init Firebase...");
-  if (firebaseManager.initFirebase()) {
-    lcd.clear();
-    lcd.setCursor(0, 0);
-    lcd.print("Firebase Ready!");
-    firebaseReady = true;
-    delay(1000);
-  } else {
-    lcd.clear();
-    lcd.setCursor(0, 0);
-    lcd.print("Firebase Failed!");
-    buzzer("error");
-    delay(2000);
-  }
-  
-  // Get template count from Firebase and local sensor
-  Serial.println("\n=== TEMPLATE COUNT SYNC ===");
-  int fbCount = firebaseManager.getTemplateCount();
+  // Get template count from local sensor
+  Serial.println("\n=== TEMPLATE COUNT ===");
   finger.getTemplateCount();
   int localCount = finger.templateCount;
   
-  Serial.print("Firebase templates: ");
-  Serial.println(fbCount);
   Serial.print("Local templates (R307): ");
   Serial.println(localCount);
   
-  nextEnrollID = max(fbCount, localCount) + 1;
+  nextEnrollID = localCount + 1;
   
   Serial.print("Next enrollment ID: ");
   Serial.println(nextEnrollID);
-  Serial.println("============================\n");
+  Serial.println("=========================\n");
   
   lcd.clear();
   lcd.setCursor(0, 0);
-  lcd.print("FB:");
-  lcd.print(fbCount);
-  lcd.print(" Local:");
+  lcd.print("Local: ");
   lcd.print(localCount);
   lcd.setCursor(0, 1);
   lcd.print("Next ID: ");
@@ -444,12 +566,12 @@ void setup() {
   lcd.setCursor(0, 1);
   lcd.print("Ready...");
   
-  Serial.println("\n=== Fingerprint System Ready ===");
+  Serial.println("\n=== EVM System Ready ===");
   Serial.println("Commands:");
-  Serial.println("  E - Enroll new fingerprint");
-  Serial.println("  V - Verify fingerprint");
+  Serial.println("  E - Enroll new voter");
+  Serial.println("  V - Start voting");
   Serial.println("  S - Show status");
-  Serial.println("================================\n");
+  Serial.println("=============================\n");
 }
 
 void loop() {
@@ -468,38 +590,36 @@ void loop() {
       Serial.println("\n>>> ENROLL MODE ACTIVATED <<<");
     }
     else if (command == 'V') {
-      currentMode = MODE_VERIFY;
+      currentMode = MODE_VOTE;
       
-      // Add stabilization delay before verification
-      Serial.println("\n>>> VERIFY MODE ACTIVATED <<<");
-      Serial.println("Preparing sensor for verification...");
+      // Add stabilization delay before voting
+      Serial.println("\n>>> VOTING MODE ACTIVATED <<<");
+      Serial.println("Preparing sensor for voting...");
       delay(1000);  // Sensor stabilization delay
       
       lcd.clear();
       lcd.setCursor(0, 0);
-      lcd.print("Mode: VERIFY");
+      lcd.print("Mode: VOTE");
       lcd.setCursor(0, 1);
       lcd.print("Ready...");
     }
     else if (command == 'S') {
-      Serial.println("\n=== System Status ===");
+      Serial.println("\n=== EVM System Status ===");
       Serial.print("WiFi: ");
       Serial.println(WiFi.status() == WL_CONNECTED ? "Connected" : "Disconnected");
-      Serial.print("Firebase: ");
-      Serial.println(firebaseReady ? "Ready" : "Not Ready");
+      Serial.print("Backend URL: ");
+      Serial.println(backendUrl);
+      Serial.print("Blockchain URL: ");
+      Serial.println(blockchainUrl);
       
       // Get current template counts
       finger.getTemplateCount();
       int localCount = finger.templateCount;
-      int fbCount = firebaseManager.getTemplateCount();
       
-      Serial.println("\n--- Template Storage ---");
+      Serial.println("\n--- Voter Storage ---");
       Serial.print("Local (R307): ");
       Serial.print(localCount);
-      Serial.println("/1000 templates");
-      Serial.print("Firebase: ");
-      Serial.print(fbCount);
-      Serial.println(" templates");
+      Serial.println("/1000 voters");
       Serial.print("Next Enroll ID: ");
       Serial.println(nextEnrollID);
       
@@ -507,22 +627,22 @@ void loop() {
       Serial.print("Mode: ");
       if (currentMode == MODE_IDLE) Serial.println("IDLE");
       else if (currentMode == MODE_ENROLL) Serial.println("ENROLL");
-      else if (currentMode == MODE_VERIFY) Serial.println("VERIFY");
+      else if (currentMode == MODE_VOTE) Serial.println("VOTE");
       
-      Serial.println("\n--- Verification Method ---");
-      Serial.println("Cloud verification with blockchain");
-      Serial.println("Immutable audit trail");
-      Serial.println("==========================\n");
+      Serial.println("\n--- Voting Candidates ---");
+      Serial.println("1. USAR");
+      Serial.println("2. USAP");
+      Serial.println("3. USDI");
+      Serial.println("==============================\n");
     }
   }
   
   // Handle different modes
   switch (currentMode) {
     case MODE_ENROLL:
-      if (firebaseReady) {  // Check dynamically instead of static flag
+      {
         uint8_t result = enrollFingerprint(nextEnrollID);
         if (result == FINGERPRINT_OK) {
-          firebaseManager.updateTemplateCount(nextEnrollID);
           nextEnrollID++;
           
           // Add delay for sensor stabilization after enrollment
@@ -536,46 +656,38 @@ void loop() {
         lcd.setCursor(0, 1);
         lcd.print("Ready...");
         Serial.println("\n>>> Returned to IDLE mode <<<");
-        Serial.println("Enter 'E' to Enroll or 'V' to Verify\n");
-      } else {
-        lcd.clear();
-        lcd.setCursor(0, 0);
-        lcd.print("Firebase not");
-        lcd.setCursor(0, 1);
-        lcd.print("ready!");
-        buzzer("error");
-        Serial.println("ERROR: Firebase not ready!");
-        delay(2000);
-        currentMode = MODE_IDLE;
+        Serial.println("Enter 'E' to Enroll or 'V' to Vote\n");
+        break;
       }
-      break;
       
-    case MODE_VERIFY:
-      Serial.println("DEBUG: In MODE_VERIFY case");
-      if (firebaseReady) {  // Check dynamically instead of static flag
-        Serial.println("DEBUG: Firebase ready, calling verifyFingerprint()");
-        verifyFingerprint();
-        Serial.println("DEBUG: Returned from verifyFingerprint()");
-        currentMode = MODE_IDLE;  // Ensure mode is reset
-        lcd.clear();
-        lcd.setCursor(0, 0);
-        lcd.print("Mode: IDLE");
-        lcd.setCursor(0, 1);
-        lcd.print("Ready...");
-        Serial.println("\n>>> Returned to IDLE mode <<<");
-        Serial.println("Enter 'E' to Enroll or 'V' to Verify\n");
-      } else {
-        lcd.clear();
-        lcd.setCursor(0, 0);
-        lcd.print("Firebase not");
-        lcd.setCursor(0, 1);
-        lcd.print("ready!");
-        buzzer("error");
-        Serial.println("ERROR: Firebase not ready!");
-        delay(2000);
-        currentMode = MODE_IDLE;
+    case MODE_VOTE:
+      {
+        Serial.println("DEBUG: In MODE_VOTE case");
+        if (wifiReady) {
+          Serial.println("DEBUG: WiFi ready, calling verifyForVoting()");
+          verifyForVoting();
+          Serial.println("DEBUG: Returned from verifyForVoting()");
+          currentMode = MODE_IDLE;  // Ensure mode is reset
+          lcd.clear();
+          lcd.setCursor(0, 0);
+          lcd.print("Mode: IDLE");
+          lcd.setCursor(0, 1);
+          lcd.print("Ready...");
+          Serial.println("\n>>> Returned to IDLE mode <<<");
+          Serial.println("Enter 'E' to Enroll or 'V' to Vote\n");
+        } else {
+          lcd.clear();
+          lcd.setCursor(0, 0);
+          lcd.print("WiFi not ready!");
+          lcd.setCursor(0, 1);
+          lcd.print("Cannot vote");
+          buzzer("error");
+          Serial.println("ERROR: WiFi not ready! Cannot submit votes.");
+          delay(2000);
+          currentMode = MODE_IDLE;
+        }
+        break;
       }
-      break;
       
     case MODE_IDLE:
       // Display status

@@ -7,6 +7,7 @@ from django.http import JsonResponse
 from django.views.decorators.http import require_http_methods
 from django.views.decorators.csrf import csrf_exempt
 from firebase_service import FirebaseService
+from datetime import datetime
 import json
 
 
@@ -387,6 +388,71 @@ def validate_blockchain(request):
 
 
 @require_http_methods(["POST"])
+@csrf_exempt
+def submit_vote(request):
+    """
+    POST /api/vote/
+    Submit a vote to the backend database
+    
+    Expected JSON payload:
+    {
+        "voterId": 2,
+        "candidate": "USAR"
+    }
+    """
+    if request.method != 'POST':
+        return JsonResponse({
+            "success": False,
+            "error": "Method not allowed"
+        }, status=405)
+    
+    try:
+        data = json.loads(request.body)
+        
+        # Validate required fields
+        required_fields = ['voterId', 'candidate']
+        for field in required_fields:
+            if field not in data:
+                return JsonResponse({
+                    "success": False,
+                    "error": f"Missing required field: {field}"
+                }, status=400)
+        
+        voter_id = data['voterId']
+        candidate = data['candidate']
+        
+        # Validate candidate
+        valid_candidates = ['USAR', 'USAP', 'USDI']
+        if candidate not in valid_candidates:
+            return JsonResponse({
+                "success": False,
+                "error": f"Invalid candidate. Must be one of: {valid_candidates}"
+            }, status=400)
+        
+        # Here you would typically save to your database
+        # For now, we'll just log and return success
+        print(f"Vote recorded: Voter ID {voter_id} voted for {candidate}")
+        
+        return JsonResponse({
+            "success": True,
+            "message": "Vote recorded successfully",
+            "voterId": voter_id,
+            "candidate": candidate,
+            "timestamp": datetime.now().isoformat()
+        })
+    
+    except json.JSONDecodeError:
+        return JsonResponse({
+            "success": False,
+            "error": "Invalid JSON in request body"
+        }, status=400)
+    except Exception as e:
+        return JsonResponse({
+            "success": False,
+            "error": str(e)
+        }, status=500)
+
+
 @csrf_exempt
 def record_vote(request):
     """

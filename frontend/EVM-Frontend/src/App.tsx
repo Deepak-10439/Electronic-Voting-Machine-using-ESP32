@@ -30,14 +30,25 @@ interface BlockchainStats {
   pending_transactions: number;
 }
 
+interface VoteResults {
+  USAR: number;
+  USAP: number;
+  USDI: number;
+  totalVotes: number;
+  winner: string | null;
+  winnerPercentage: number;
+}
+
 interface BlockchainTransaction {
   type: string;
   user_id?: string;
-  fingerprint_id: number;
+  fingerprint_id?: number;
   template_hash?: string;
   verification_result?: string;
   similarity_score?: number;
-  esp32_ip: string;
+  vote_choice?: string;
+  election_id?: string;
+  esp32_ip?: string;
   action: string;
   timestamp: number;
   datetime: string;
@@ -61,10 +72,46 @@ function App() {
   const [votingStatus, setVotingStatus] = useState<VotingStatus>({ status: 'inactive' });
   const [blockchainStats, setBlockchainStats] = useState<BlockchainStats>({ total_blocks: 0, pending_transactions: 0 });
   const [blockchainTransactions, setBlockchainTransactions] = useState<BlockchainTransaction[]>([]);
+  const [voteResults, setVoteResults] = useState<VoteResults>({ USAR: 0, USAP: 0, USDI: 0, totalVotes: 0, winner: null, winnerPercentage: 0 });
   const [modalData, setModalData] = useState<ModalData>({ isOpen: false });
   const [scrollOffset, setScrollOffset] = useState<number>(0);
   const [lastUpdate, setLastUpdate] = useState<Date>(new Date());
   const [isOnline, setIsOnline] = useState<boolean>(true);
+
+  // Function to calculate vote results
+  const calculateVoteResults = (transactions: BlockchainTransaction[]): VoteResults => {
+    const voteCounts = { USAR: 0, USAP: 0, USDI: 0 };
+    
+    transactions.forEach(tx => {
+      if (tx.type === 'VOTE' && tx.vote_choice) {
+        const choice = tx.vote_choice as keyof typeof voteCounts;
+        if (choice in voteCounts) {
+          voteCounts[choice]++;
+        }
+      }
+    });
+    
+    const totalVotes = Object.values(voteCounts).reduce((sum, count) => sum + count, 0);
+    let winner = null;
+    let winnerPercentage = 0;
+    
+    if (totalVotes > 0) {
+      const maxVotes = Math.max(...Object.values(voteCounts));
+      const winners = Object.entries(voteCounts).filter(([_, count]) => count === maxVotes);
+      
+      if (winners.length === 1 && maxVotes > 0) {
+        winner = winners[0][0];
+        winnerPercentage = (maxVotes / totalVotes) * 100;
+      }
+    }
+    
+    return {
+      ...voteCounts,
+      totalVotes,
+      winner,
+      winnerPercentage
+    };
+  };
 
   // Fetch data from APIs
   const fetchData = async () => {
@@ -113,11 +160,15 @@ function App() {
       if (auditRes.ok) {
         const auditData = await auditRes.json();
         if (auditData.success && auditData.transactions) {
-          // Filter to only show verification transactions
-          const verificationTransactions = auditData.transactions.filter(
-            (tx: BlockchainTransaction) => tx.type === 'VERIFICATION'
+          // Filter to only show vote transactions
+          const voteTransactions = auditData.transactions.filter(
+            (tx: BlockchainTransaction) => tx.type === 'VOTE'
           );
-          setBlockchainTransactions(verificationTransactions);
+          setBlockchainTransactions(voteTransactions);
+          
+          // Calculate vote results
+          const results = calculateVoteResults(voteTransactions);
+          setVoteResults(results);
           
           // Keep original total_blocks from blockchain info, don't override
           // This prevents the count from changing when filtering transactions
@@ -145,6 +196,94 @@ function App() {
     const interval = setInterval(fetchData, 5000); // Update every 5 seconds
     return () => clearInterval(interval);
   }, []);
+
+  // Results Panel component
+  const ResultsPanel = () => {
+    const getPercentage = (votes: number): number => {
+      return voteResults.totalVotes > 0 ? (votes / voteResults.totalVotes) * 100 : 0;
+    };
+
+    const getCandidateColor = (candidate: string): string => {
+      if (voteResults.winner === candidate) return 'winner';
+      return 'candidate';
+    };
+
+    const getCandidateIcon = (candidate: string): string => {
+      if (voteResults.winner === candidate) return '👑';
+      return '🗳️';
+    };
+
+    return (
+      <section className="results-section">
+        <h2>🏆 Election Results</h2>
+        
+        {voteResults.totalVotes === 0 ? (
+          <div className="no-votes">
+            <div className="empty-state">
+              <div className="empty-icon">📊</div>
+              <div className="empty-text">No votes cast yet</div>
+              <div className="empty-subtitle">Results will appear here as votes are recorded</div>
+            </div>
+          </div>
+        ) : (
+          <div className="results-content">
+            <div className="results-summary">
+              <div className="total-votes">
+                <h3>Total Votes: {voteResults.totalVotes}</h3>
+              </div>
+              {voteResults.winner && (
+                <div className="current-winner">
+                  <h3>🥇 Current Leader: {voteResults.winner}</h3>
+                  <p>{voteResults.winnerPercentage.toFixed(1)}% of votes</p>
+                </div>
+              )}
+              {!voteResults.winner && voteResults.totalVotes > 0 && (
+                <div className="tie-status">
+                  <h3>🤝 Currently Tied</h3>
+                  <p>Multiple candidates have equal votes</p>
+                </div>
+              )}
+            </div>
+            
+            <div className="candidates-grid">
+              {(['USAR', 'USAP', 'USDI'] as const).map(candidate => {
+                const votes = voteResults[candidate];
+                const percentage = getPercentage(votes);
+                const isWinner = voteResults.winner === candidate;
+                
+                return (
+                  <div key={candidate} className={`candidate-card ${getCandidateColor(candidate)}`}>
+                    <div className="candidate-header">
+                      <span className="candidate-icon">{getCandidateIcon(candidate)}</span>
+                      <h4>{candidate}</h4>
+                      {isWinner && <span className="winner-badge">LEADING</span>}
+                    </div>
+                    
+                    <div className="vote-count">{votes}</div>
+                    <div className="vote-label">votes</div>
+                    
+                    <div className="progress-bar">
+                      <div 
+                        className="progress-fill" 
+                        style={{ width: `${percentage}%` }}
+                      ></div>
+                    </div>
+                    
+                    <div className="percentage">{percentage.toFixed(1)}%</div>
+                  </div>
+                );
+              })}
+            </div>
+            
+            <div className="results-footer">
+              <p>🔄 Results update automatically as new votes are recorded</p>
+              <p>📊 Live data from blockchain transactions</p>
+            </div>
+          </div>
+        )}
+      </section>
+    );
+  };
 
   // Helper component for stat cards
   const StatCard = ({ title, value, subtitle, color, pulse }: {
@@ -233,45 +372,29 @@ function App() {
                   <span className="detail-label">Timestamp:</span>
                   <span className="detail-value">{transaction.datetime}</span>
                 </div>
-                <div className="detail-row">
-                  <span className="detail-label">Fingerprint ID:</span>
-                  <span className="detail-value">{transaction.fingerprint_id}</span>
-                </div>
                 {transaction.user_id && (
                   <div className="detail-row">
-                    <span className="detail-label">User ID:</span>
+                    <span className="detail-label">Voter ID:</span>
                     <span className="detail-value">{transaction.user_id}</span>
                   </div>
                 )}
-                {transaction.verification_result && (
+                {transaction.vote_choice && (
                   <div className="detail-row">
-                    <span className="detail-label">Verification Result:</span>
-                    <span className={`detail-value ${transaction.verification_result.toLowerCase()}`}>
-                      {transaction.verification_result}
+                    <span className="detail-label">Vote Choice:</span>
+                    <span className={`detail-value vote-choice`}>
+                      {transaction.vote_choice}
                     </span>
                   </div>
                 )}
-                {transaction.similarity_score !== undefined && (
+                {transaction.election_id && (
                   <div className="detail-row">
-                    <span className="detail-label">Similarity Score:</span>
-                    <span className="detail-value">{transaction.similarity_score.toFixed(2)}%</span>
-                  </div>
-                )}
-                {transaction.template_hash && (
-                  <div className="detail-row">
-                    <span className="detail-label">Template Hash:</span>
-                    <span className="detail-value hash">
-                      {transaction.template_hash}
-                    </span>
+                    <span className="detail-label">Election ID:</span>
+                    <span className="detail-value">{transaction.election_id}</span>
                   </div>
                 )}
                 <div className="detail-row">
                   <span className="detail-label">Action:</span>
                   <span className="detail-value">{transaction.action}</span>
-                </div>
-                <div className="detail-row">
-                  <span className="detail-label">ESP32 IP:</span>
-                  <span className="detail-value">{transaction.esp32_ip}</span>
                 </div>
               </div>
             ) : (
@@ -287,12 +410,12 @@ function App() {
 
   // Blockchain visualization component
   const BlockchainVisualization = () => {
-    // Get verification transactions sorted by block index (newest first)
-    const sortedVerificationBlocks = blockchainTransactions
+    // Get vote transactions sorted by block index (newest first)
+    const sortedVoteBlocks = blockchainTransactions
       .sort((a, b) => b.block_index - a.block_index);
     
     // Create visible blocks with pagination
-    const visibleBlocks = sortedVerificationBlocks
+    const visibleBlocks = sortedVoteBlocks
       .slice(scrollOffset, scrollOffset + 5)
       .map(tx => ({
         index: tx.block_index,
@@ -306,7 +429,7 @@ function App() {
         <div className="blockchain-stats">
           <div className="blockchain-info">
             <StatCard
-              title="Verification Blocks"
+              title="Vote Blocks"
               value={blockchainTransactions.length}
               color="blockchain"
             />
@@ -345,7 +468,7 @@ function App() {
               ← Previous
             </button>
             <span className="block-range">
-              Showing {visibleBlocks.length} of {blockchainTransactions.length} verification blocks
+              Showing {visibleBlocks.length} of {blockchainTransactions.length} vote blocks
             </span>
             <button 
               className={`scroll-btn ${!canScrollRight ? 'disabled' : ''}`}
@@ -369,8 +492,8 @@ function App() {
                     {block.isLatest ? '🟡 Latest' : '✅ Confirmed'}
                   </div>
                   {block.transaction && (
-                    <div className={`block-type ${block.transaction.verification_result?.toLowerCase()}`}>
-                      {block.transaction.verification_result}
+                    <div className={`block-type vote`}>
+                      {block.transaction.vote_choice || 'VOTE'}
                     </div>
                   )}
                 </div>
@@ -378,9 +501,9 @@ function App() {
             ) : (
               <div className="no-blocks">
                 <div className="empty-state">
-                  <div className="empty-icon">🔗</div>
-                  <div className="empty-text">No verification blocks found</div>
-                  <div className="empty-subtitle">Verification blocks will appear here when users verify their fingerprints</div>
+                  <div className="empty-icon">🗳️</div>
+                  <div className="empty-text">No vote blocks found</div>
+                  <div className="empty-subtitle">Vote blocks will appear here when voters cast their votes</div>
                 </div>
               </div>
             )}
@@ -476,6 +599,9 @@ function App() {
             )}
           </div>
         </section>
+
+        {/* Election Results */}
+        <ResultsPanel />
 
         {/* Blockchain Visualization */}
         <BlockchainVisualization />

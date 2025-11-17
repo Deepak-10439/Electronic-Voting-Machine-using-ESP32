@@ -8,6 +8,9 @@
 // Backend Configuration
 #define BACKEND_URL "https://swift-habitat-475216-n3.uc.r.appspot.com"
 
+// Blockchain Configuration (uses same backend URL)
+#define BLOCKCHAIN_URL "https://swift-habitat-475216-n3.uc.r.appspot.com"
+
 // Firebase Configuration
 // Complete Firebase config from Firebase Console > Project Settings
 
