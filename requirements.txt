@@ -1,8 +1,0 @@
-Django==4.2.26
-djangorestframework==3.14.0
-firebase-admin==6.3.0
-python-dotenv==1.0.0
-django-cors-headers==4.3.1
-pytz==2023.3
-gunicorn==21.2.0
-requests==2.31.0
