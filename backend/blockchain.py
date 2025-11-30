@@ -6,6 +6,7 @@ Provides immutable audit trail for fingerprint enrollment and verification
 import hashlib
 import json
 import time
+import os
 from datetime import datetime
 from typing import List, Dict, Optional
 
@@ -56,10 +57,17 @@ class EVMBlockchain:
     """
     Simple blockchain for EVM fingerprint operations
     """
-    def __init__(self):
+    def __init__(self, data_file: str = "blockchain_data.json"):
         self.difficulty = 2  # Very low difficulty for minimal computation
         self.pending_transactions: List[Dict] = []
-        self.chain: List[Block] = [self.create_genesis_block()]
+        self.data_file = data_file
+        
+        # Try to load existing blockchain, create new if doesn't exist
+        if os.path.exists(data_file) and os.path.getsize(data_file) > 0:
+            self.load_from_file()
+        else:
+            self.chain: List[Block] = [self.create_genesis_block()]
+            self.save_to_file()
     
     def create_genesis_block(self) -> Block:
         """Create the first block in the chain"""
@@ -113,6 +121,9 @@ class EVMBlockchain:
         # Add to chain and clear pending
         self.chain.append(new_block)
         self.pending_transactions.clear()
+        
+        # Auto-save after mining
+        self.save_to_file()
         
         return new_block
     
@@ -221,14 +232,53 @@ class EVMBlockchain:
                 block.hash = block_data["hash"]
                 new_chain.append(block)
             
-            # Validate imported chain
-            temp_blockchain = EVMBlockchain()
-            temp_blockchain.chain = new_chain
-            if temp_blockchain.validate_chain():
-                self.chain = new_chain
-                return True
-            return False
+            # Simple validation - check chain continuity
+            for i in range(1, len(new_chain)):
+                current_block = new_chain[i]
+                previous_block = new_chain[i - 1]
+                
+                # Check if current block points to previous block
+                if current_block.previous_hash != previous_block.hash:
+                    return False
+            
+            # If validation passes, update the chain
+            self.chain = new_chain
+            return True
         except Exception:
+            return False
+    
+    def save_to_file(self) -> bool:
+        """Save blockchain to file"""
+        try:
+            data = {
+                "chain": self.export_chain(),
+                "pending_transactions": self.pending_transactions,
+                "saved_at": datetime.now().isoformat()
+            }
+            with open(self.data_file, 'w') as f:
+                json.dump(data, f, indent=2)
+            return True
+        except Exception as e:
+            print(f"Error saving blockchain: {e}")
+            return False
+    
+    def load_from_file(self) -> bool:
+        """Load blockchain from file"""
+        try:
+            with open(self.data_file, 'r') as f:
+                data = json.load(f)
+            
+            if "chain" in data:
+                if self.import_chain(data["chain"]):
+                    if "pending_transactions" in data:
+                        self.pending_transactions = data["pending_transactions"]
+                    print(f"Blockchain loaded from {self.data_file}")
+                    return True
+            return False
+        except Exception as e:
+            print(f"Error loading blockchain: {e}")
+            # Create new blockchain if loading fails
+            self.chain = [self.create_genesis_block()]
             return False
 
 
