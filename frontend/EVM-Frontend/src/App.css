@@ -44,7 +44,9 @@ body {
   display: flex;
   justify-content: space-between;
   align-items: center;
+  gap: 1rem;
   font-size: 0.9rem;
+  flex-wrap: wrap;
 }
 
 .connection-status {
@@ -61,6 +63,15 @@ body {
 .connection-status.offline {
   background: rgba(239, 68, 68, 0.2);
   border: 1px solid #ef4444;
+}
+
+.data-status {
+  padding: 0.25rem 0.75rem;
+  border-radius: 20px;
+  font-weight: 600;
+  background: rgba(59, 130, 246, 0.2);
+  border: 1px solid #3b82f6;
+  color: rgba(255, 255, 255, 0.9);
 }
 
 .last-update {
@@ -682,6 +693,38 @@ body {
 /* Vote-specific styles */
 .block-type.vote {
   background: linear-gradient(45deg, #28a745, #20c997);
+  color: white;
+  font-weight: bold;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.block-type.enrollment {
+  background: linear-gradient(45deg, #3b82f6, #60a5fa);
+  color: white;
+  font-weight: bold;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.block-type.verification {
+  background: linear-gradient(45deg, #8b5cf6, #a78bfa);
+  color: white;
+  font-weight: bold;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.block-type.genesis {
+  background: linear-gradient(45deg, #f59e0b, #fbbf24);
+  color: white;
+  font-weight: bold;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.block-type.unknown {
+  background: linear-gradient(45deg, #6b7280, #9ca3af);
   color: white;
   font-weight: bold;
   text-transform: uppercase;
