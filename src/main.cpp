@@ -171,28 +171,24 @@ void handleVoting(int voterId) {
       }
     }
     
-    // Check for button presses (with debouncing)
-    static unsigned long lastButtonCheck = 0;
-    if (millis() - lastButtonCheck > 50) { // Simple debouncing
-      if (digitalRead(enrollButtonPin) == LOW) { // Pin 25 = USAR
-        choice = 1;
-        Serial.println("Choice selected via Button (Pin 25): USAR");
-        delay(200); // Additional debounce delay
-        break;
-      }
-      if (digitalRead(voteButtonPin) == LOW) { // Pin 26 = USAP
-        choice = 2;
-        Serial.println("Choice selected via Button (Pin 26): USAP");
-        delay(200);
-        break;
-      }
-      if (digitalRead(statusButtonPin) == LOW) { // Pin 27 = USDI
-        choice = 3;
-        Serial.println("Choice selected via Button (Pin 27): USDI");
-        delay(200);
-        break;
-      }
-      lastButtonCheck = millis();
+    // Check for button presses
+    if (digitalRead(enrollButtonPin) == LOW) { // Pin 25 = USAR
+      choice = 1;
+      Serial.println("Choice selected via Button (Pin 25): USAR");
+      delay(300); // Simple debounce
+      break;
+    }
+    if (digitalRead(voteButtonPin) == LOW) { // Pin 26 = USAP
+      choice = 2;
+      Serial.println("Choice selected via Button (Pin 26): USAP");
+      delay(300); // Simple debounce
+      break;
+    }
+    if (digitalRead(statusButtonPin) == LOW) { // Pin 27 = USDI
+      choice = 3;
+      Serial.println("Choice selected via Button (Pin 27): USDI");
+      delay(300); // Simple debounce
+      break;
     }
     
     delay(10);
@@ -605,95 +601,45 @@ void setup() {
 }
 
 void loop() {
-  // Check for button press (enrollment button)
-  static bool lastButtonState = HIGH;
-  static unsigned long lastDebounceTime = 0;
-  static unsigned long debounceDelay = 50;
+  // Check for enroll button
+  static bool lastEnrollPressed = false;
+  bool enrollPressed = (digitalRead(enrollButtonPin) == LOW);
   
-  bool buttonReading = digitalRead(enrollButtonPin);
-  
-  // Button debouncing
-  if (buttonReading != lastButtonState) {
-    lastDebounceTime = millis();
+  if (enrollPressed && !lastEnrollPressed && currentMode == MODE_IDLE) {
+    currentMode = MODE_ENROLL;
+    lcd.clear();
+    lcd.setCursor(0, 0);
+    lcd.print("Mode: ENROLL");
+    lcd.setCursor(0, 1);
+    lcd.print("Ready...");
+    Serial.println("\n>>> ENROLL MODE ACTIVATED (Button) <<<");
+    delay(300); // Simple debounce
   }
+  lastEnrollPressed = enrollPressed;
   
-  if ((millis() - lastDebounceTime) > debounceDelay) {
-    // Button state has been stable for debounce delay
-    static bool buttonState = HIGH;
-    if (buttonReading != buttonState) {
-      buttonState = buttonReading;
-      
-      // Button pressed (LOW because of INPUT_PULLUP)
-      if (buttonState == LOW && currentMode == MODE_IDLE) {
-        currentMode = MODE_ENROLL;
-        lcd.clear();
-        lcd.setCursor(0, 0);
-        lcd.print("Mode: ENROLL");
-        lcd.setCursor(0, 1);
-        lcd.print("Ready...");
-        Serial.println("\n>>> ENROLL MODE ACTIVATED (Button) <<<");
-      }
-    }
+  // Check for vote button
+  static bool lastVotePressed = false;
+  bool votePressed = (digitalRead(voteButtonPin) == LOW);
+  
+  if (votePressed && !lastVotePressed && currentMode == MODE_IDLE) {
+    currentMode = MODE_VOTE;
+    Serial.println("\n>>> VOTING MODE ACTIVATED (Button) <<<");
+    Serial.println("Preparing sensor for voting...");
+    delay(1000);  // Sensor stabilization delay
+    
+    lcd.clear();
+    lcd.setCursor(0, 0);
+    lcd.print("Mode: VOTE");
+    lcd.setCursor(0, 1);
+    lcd.print("Ready...");
   }
+  lastVotePressed = votePressed;
   
-  lastButtonState = buttonReading;
+  // Check for status button
+  static bool lastStatusPressed = false;
+  bool statusPressed = (digitalRead(statusButtonPin) == LOW);
   
-  // Check for vote button press
-  static bool lastVoteButtonState = HIGH;
-  static unsigned long lastVoteDebounceTime = 0;
-  
-  bool voteButtonReading = digitalRead(voteButtonPin);
-  
-  // Vote button debouncing
-  if (voteButtonReading != lastVoteButtonState) {
-    lastVoteDebounceTime = millis();
-  }
-  
-  if ((millis() - lastVoteDebounceTime) > debounceDelay) {
-    // Vote button state has been stable for debounce delay
-    static bool voteButtonState = HIGH;
-    if (voteButtonReading != voteButtonState) {
-      voteButtonState = voteButtonReading;
-      
-      // Vote button pressed (LOW because of INPUT_PULLUP)
-      if (voteButtonState == LOW && currentMode == MODE_IDLE) {
-        currentMode = MODE_VOTE;
-        
-        // Add stabilization delay before voting
-        Serial.println("\n>>> VOTING MODE ACTIVATED (Button) <<<");
-        Serial.println("Preparing sensor for voting...");
-        delay(1000);  // Sensor stabilization delay
-        
-        lcd.clear();
-        lcd.setCursor(0, 0);
-        lcd.print("Mode: VOTE");
-        lcd.setCursor(0, 1);
-        lcd.print("Ready...");
-      }
-    }
-  }
-  
-  lastVoteButtonState = voteButtonReading;
-  
-  // Check for status button press
-  static bool lastStatusButtonState = HIGH;
-  static unsigned long lastStatusDebounceTime = 0;
-  
-  bool statusButtonReading = digitalRead(statusButtonPin);
-  
-  // Status button debouncing
-  if (statusButtonReading != lastStatusButtonState) {
-    lastStatusDebounceTime = millis();
-  }
-  
-  if ((millis() - lastStatusDebounceTime) > debounceDelay) {
-    // Status button state has been stable for debounce delay
-    static bool statusButtonState = HIGH;
-    if (statusButtonReading != statusButtonState) {
-      statusButtonState = statusButtonReading;
-      
-      // Status button pressed (LOW because of INPUT_PULLUP)
-      if (statusButtonState == LOW) {
+  if (statusPressed && !lastStatusPressed) {
         Serial.println("\n=== EVM System Status (Button) ===");
         Serial.print("WiFi: ");
         Serial.println(WiFi.status() == WL_CONNECTED ? "Connected" : "Disconnected");
@@ -756,11 +702,9 @@ void loop() {
           lcd.setCursor(0, 1);
           lcd.print("Ready...");
         }
-      }
-    }
+      delay(300); // Simple debounce
   }
-  
-  lastStatusButtonState = statusButtonReading;
+  lastStatusPressed = statusPressed;
   
   // Check for Serial commands
   if (Serial.available() > 0) {
