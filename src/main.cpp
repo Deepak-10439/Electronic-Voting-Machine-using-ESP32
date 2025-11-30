@@ -156,6 +156,14 @@ void handleVoting(int voterId) {
   unsigned long startTime = millis();
   unsigned long timeout = 30000; // 30 second timeout
   
+  // Debug: Print initial button states
+  Serial.print("Initial button states - Pin 25: ");
+  Serial.print(digitalRead(enrollButtonPin));
+  Serial.print(", Pin 26: ");
+  Serial.print(digitalRead(voteButtonPin));
+  Serial.print(", Pin 27: ");
+  Serial.println(digitalRead(statusButtonPin));
+  
   // Wait for either serial input or button press
   while (choice == 0 && (millis() - startTime) < timeout) {
     // Check for serial input
@@ -171,24 +179,38 @@ void handleVoting(int voterId) {
       }
     }
     
-    // Check for button presses
-    if (digitalRead(enrollButtonPin) == LOW) { // Pin 25 = USAR
-      choice = 1;
-      Serial.println("Choice selected via Button (Pin 25): USAR");
-      delay(300); // Simple debounce
-      break;
+    // Read button states
+    bool btn25 = digitalRead(enrollButtonPin);
+    bool btn26 = digitalRead(voteButtonPin);
+    bool btn27 = digitalRead(statusButtonPin);
+    
+    // Check for button presses with stable reading
+    if (btn25 == LOW) {
+      delay(50); // Wait for stable reading
+      if (digitalRead(enrollButtonPin) == LOW) { // Confirm button is still pressed
+        choice = 1;
+        Serial.println("Choice selected via Button (Pin 25): USAR");
+        delay(300); // Debounce delay
+        break;
+      }
     }
-    if (digitalRead(voteButtonPin) == LOW) { // Pin 26 = USAP
-      choice = 2;
-      Serial.println("Choice selected via Button (Pin 26): USAP");
-      delay(300); // Simple debounce
-      break;
+    if (btn26 == LOW) {
+      delay(50); // Wait for stable reading
+      if (digitalRead(voteButtonPin) == LOW) { // Confirm button is still pressed
+        choice = 2;
+        Serial.println("Choice selected via Button (Pin 26): USAP");
+        delay(300); // Debounce delay
+        break;
+      }
     }
-    if (digitalRead(statusButtonPin) == LOW) { // Pin 27 = USDI
-      choice = 3;
-      Serial.println("Choice selected via Button (Pin 27): USDI");
-      delay(300); // Simple debounce
-      break;
+    if (btn27 == LOW) {
+      delay(50); // Wait for stable reading
+      if (digitalRead(statusButtonPin) == LOW) { // Confirm button is still pressed
+        choice = 3;
+        Serial.println("Choice selected via Button (Pin 27): USDI");
+        delay(300); // Debounce delay
+        break;
+      }
     }
     
     delay(10);
