@@ -422,7 +422,7 @@ function App() {
     }
   };
 
-  // Set up real-time data fetching
+  // Set up initial data fetching
   useEffect(() => {
     // Load cached data first
     const hasCache = loadCachedData();
@@ -430,12 +430,10 @@ function App() {
       setIsLoading(false);
     }
     
-    // Fetch fresh data
+    // Fetch fresh data once
     fetchData();
     
-    // Set up interval for updates
-    const interval = setInterval(fetchData, 5000); // Update every 5 seconds
-    return () => clearInterval(interval);
+    // No automatic interval - only manual refresh
   }, []);
 
   // Effect to update cached data when key state changes
