@@ -521,11 +521,11 @@ function App() {
               })}
             </div>
             
-            <div className="results-footer">
+            {/* <div className="results-footer">
               <p>🔄 Results update automatically as new votes are recorded</p>
               <p>📊 Live data from blockchain transactions</p>
               <p>💾 Data persists across page refreshes</p>
-            </div>
+            </div> */}
           </div>
         )}
       </section>
@@ -681,14 +681,14 @@ function App() {
           <div className="blockchain-info">
             <StatCard
               title="Total Blocks"
-              value={blockchainStats.total_blocks}
+              value={blockchainTransactions.length}
               color="blockchain"
             />
-            <StatCard
+            {/* <StatCard
               title="Transaction Blocks"
               value={blockchainTransactions.length}
               color="blue"
-            />
+            /> */}
             <StatCard
               title="Pending Transactions"
               value={blockchainStats.pending_transactions}
@@ -782,13 +782,13 @@ function App() {
           <div className={`connection-status ${isOnline ? 'online' : 'offline'}`}>
             {isOnline ? '🟢 Online' : '🔴 Offline'}
           </div>
-          <div className="data-status">
+          {/* <div className="data-status">
             {isLoading ? '⏳ Loading...' : dataHash ? '💾 Data Synced' : '📡 Live Data'}
-          </div>
+          </div> */}
           <div className="last-update">
             Last Update: {lastUpdate.toLocaleTimeString()}
           </div>
-          <button 
+          {/* <button 
             onClick={() => {
               console.log('Current state:', {
                 blockchainTransactions,
@@ -809,8 +809,8 @@ function App() {
             }}
           >
             🔍 Debug
-          </button>
-          <button 
+          </button> */}
+          {/* <button 
             onClick={() => {
               // Force load sample data for testing
               const sampleTransactions = [
@@ -911,8 +911,8 @@ function App() {
             }}
           >
             🧪 Test Data
-          </button>
-          <button 
+          </button> */}
+          {/* <button 
             onClick={() => {
               console.log('Forcing data refresh...');
               setIsLoading(true);
@@ -931,13 +931,13 @@ function App() {
             }}
           >
             🔄 Refresh
-          </button>
+          </button> */}
         </div>
       </header>
 
       <main className="dashboard-content">
         {/* Voter Statistics */}
-        <section className="stats-section">
+        {/* <section className="stats-section">
           <h2>👥 Voter Statistics</h2>
           <div className="stats-grid">
             <StatCard
@@ -959,7 +959,7 @@ function App() {
               color="red"
             />
           </div>
-        </section>
+        </section> */}
 
         {/* Voting Statistics */}
         <section className="stats-section">
@@ -986,7 +986,7 @@ function App() {
           </div>
         </section>
 
-        {/* Current Voting Status */}
+        {/* Current Voting Status
         <section className="status-section">
           <h2>⚡ Current Status</h2>
           <div className={`voting-status ${votingStatus.status}`}>
@@ -1004,7 +1004,7 @@ function App() {
               </div>
             )}
           </div>
-        </section>
+        </section> */}
 
         {/* Election Results */}
         <ResultsPanel />
